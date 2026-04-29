@@ -42,6 +42,9 @@ Route::get('/adminprofile', function () {
 Route::delete('/customer/{id}', [CustomerController::class, 'destroy']);
 Route::put('/customer/{id}', [CustomerController::class, 'update']);
 Route::post('/addcustomer/', [AuthController::class, 'register']);
+Route::get('/inventory-log', [InventoryLogController::class, 'index']);
+Route::put('/inventory-log/{id}', [InventoryLogController::class, 'update']);
+Route::delete('/inventory-log/{id}', [InventoryLogController::class, 'destroy']);
 
 
 
