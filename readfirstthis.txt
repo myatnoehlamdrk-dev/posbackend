@@ -1,0 +1,3 @@
+I use mysql query as extra. 
+add email and password to customer table
+loyalty take default 0
