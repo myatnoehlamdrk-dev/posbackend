@@ -35,7 +35,7 @@ class OrderController extends Controller
             'user_id' => 'required|integer',
             'c_id' => 'required|integer',
             'invoice_no' => 'required|String',
-            'total_amount' => 'required|integer',
+            'total_amount' => 'required|numeric',
             'payment' => 'required|string',
             // 'created_at' => 'required|date_format:Y-m-d H:i:s',
         ]);
@@ -51,7 +51,7 @@ class OrderController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'Product created',
+            'message' => 'Order created',
             'data' => $product
         ], 201);
     }

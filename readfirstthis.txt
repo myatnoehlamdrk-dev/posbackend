@@ -1,3 +1,4 @@
 I use mysql query as extra. 
 add email and password to customer table
 loyalty take default 0
+add id1 user and customer with sql query
