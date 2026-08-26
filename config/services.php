@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'imgbb' => [
+        'api_key' => env('IMGBB_API_KEY'),
+        'base_url' => env('IMGBB_BASE_URL', 'https://api.imgbb.com/1/upload'),
+    ],
+
 ];

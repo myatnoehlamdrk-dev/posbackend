@@ -2,63 +2,87 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\Customer;
+use App\Http\Resources\UserResource;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function register(Request $request)
+    public function register(Request $request): JsonResponse
     {
-        //  Validation
-        $request->validate([
-            'name' => 'required|string',
-            'email' => 'required|email|unique:customers,email',
-            'phone' => 'required|string',
-            'password' => 'required|min:6',
+        $data = $request->validate([
+            'fullName' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'min:6'],
+            'phone' => ['nullable', 'string'],
+            'social' => ['nullable', 'string'],
+            'role' => ['nullable', 'string'],
+            'address' => ['nullable', 'string'],
+            'nrc' => ['nullable', 'string'],
+            'billingWay' => ['nullable', 'max:255'],
+            'dob' => ['nullable', 'string'],
+            'gender' => ['nullable', 'string'],
+            'shopId' => ['nullable', 'exists:shops,id'],
         ]);
 
-        //  Save user
-        $user = Customer::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'password' => Hash::make($request->password), // 🔒 important
+        $user = User::create([
+            'name' => $data['fullName'],
+            'email' => $data['email'],
+            'password' => Hash::make($data['password']),
+            'phone' => $data['phone'] ?? null,
+            'social' => $data['social'] ?? null,
+            'role' => $data['role'] ?? null,
+            'address' => $data['address'] ?? null,
+            'nrc_no' => $data['nrc'] ?? null,
+            'billing_way' => $data['billingWay'] ?? null,
+            'date_of_birth' => $data['dob'] ?? null,
+            'gender' => $data['gender'] ?? null,
+            'shop_id' => $data['shopId'] ?? null,
         ]);
 
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user
-        ], 201);
+        $token = $user->createToken('api')->plainTextToken;
+
+        return response()->json(array_merge(UserResource::make($user)->resolve(request()), [
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+        ]), 201);
     }
-    public function login(Request $request)
+
+    public function login(Request $request): JsonResponse
     {
-        //  Validation
-        $request->validate([
-            'name' => 'required|string',
-            'email' => 'required|email|unique:customers,email',
-            'role_id' => 'required|integer',
-            'password' => 'required|min:6',
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+            'password' => ['required', 'string'],
         ]);
 
-        //  Save user
-        $user = Customer::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'password' => Hash::make($request->password), // 🔒 important
-        ]);
+        $user = User::where('email', $data['email'])->first();
 
-        return response()->json([
-            'message' => 'User registered successfully',
-            'user' => $user
-        ], 201);
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'email' => ['The provided credentials are incorrect.'],
+            ]);
+        }
+
+        $token = $user->createToken('api')->plainTextToken;
+
+        return response()->json(array_merge(UserResource::make($user)->resolve(request()), [
+            'access_token' => $token,
+            'token_type' => 'Bearer',
+        ]));
     }
-     public function index()
-{
-    $users = \App\Models\User::all();
 
-    return response()->json($users, 200);
-}
+    public function logout(Request $request): JsonResponse
+    {
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json(['message' => 'Logged out successfully.']);
+    }
+
+    public function me(Request $request): JsonResponse
+    {
+        return response()->json(UserResource::make($request->user()->load('shop')));
+    }
 }

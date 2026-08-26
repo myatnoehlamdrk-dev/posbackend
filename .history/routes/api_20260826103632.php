@@ -10,15 +10,13 @@ Route::get('/', function () {
 });
 
 Route::prefix('auth')->group(function () {
-    Route::post('/register', [App\Http\Controllers\AuthController::class, 'register']);
+    
     Route::post('/login', [App\Http\Controllers\AuthController::class, 'login']);
 
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('auth.token')->group(function () {
         Route::post('/logout', [App\Http\Controllers\AuthController::class, 'logout']);
         Route::get('/me', [App\Http\Controllers\AuthController::class, 'me']);
     });
 });
 
-Route::apiResource('shops', App\Http\Controllers\ShopController::class);
-
-Route::post('images', [App\Http\Controllers\ImageController::class, 'store']);
+Route::middleware('auth.token')->apiResource('shops', App\Http\Controllers\ShopController::class);
