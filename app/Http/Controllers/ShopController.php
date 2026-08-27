@@ -17,7 +17,7 @@ class ShopController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'logoData' => ['nullable', 'string'],
+            'logoUrl' => ['nullable', 'string'],
             'name' => ['required', 'string', 'max:255'],
             'type' => ['nullable', 'string'],
             'physicalAddress' => ['nullable', 'string'],
@@ -28,7 +28,7 @@ class ShopController extends Controller
         ]);
 
         $shop = Shop::create([
-            'shop_image' => $data['logoData'] ?? null,
+            'shop_image' => $data['logoUrl'] ?? null,
             'shop_name' => $data['name'],
             'shop_type' => $data['type'] ?? null,
             'shop_physical_address' => $data['physicalAddress'] ?? null,
@@ -48,7 +48,7 @@ class ShopController extends Controller
     public function update(Request $request, Shop $shop): JsonResponse
     {
         $data = $request->validate([
-            'logoData' => ['nullable', 'string'],
+            'logoUrl' => ['nullable', 'string'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'type' => ['nullable', 'string'],
             'physicalAddress' => ['nullable', 'string'],
@@ -59,7 +59,7 @@ class ShopController extends Controller
         ]);
 
         $shop->update([
-            'shop_image' => $data['logoData'] ?? $shop->shop_image,
+            'shop_image' => $data['logoUrl'] ?? $shop->shop_image,
             'shop_name' => $data['name'] ?? $shop->shop_name,
             'shop_type' => $data['type'] ?? $shop->shop_type,
             'shop_physical_address' => $data['physicalAddress'] ?? $shop->shop_physical_address,

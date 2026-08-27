@@ -10,7 +10,7 @@ class ShopResource extends JsonResource
     {
         return [
             'id' => (string) $this->id,
-            'logoData' => $this->shop_image,
+            'logoUrl' => $this->shop_image,
             'name' => $this->shop_name,
             'type' => $this->shop_type ?? '',
             'physicalAddress' => $this->shop_physical_address ?? '',

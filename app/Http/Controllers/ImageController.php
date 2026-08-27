@@ -16,7 +16,7 @@ class ImageController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'image' => ['required', 'image', 'max:5120'], // up to 5MB
+            'image' => ['required', 'image'], // accepts large images
             'name' => ['nullable', 'string', 'max:255'],
         ]);
 

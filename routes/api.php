@@ -21,4 +21,13 @@ Route::prefix('auth')->group(function () {
 
 Route::apiResource('shops', App\Http\Controllers\ShopController::class);
 
+Route::apiResource('suppliers', App\Http\Controllers\SupplierController::class);
+Route::apiResource('packages', App\Http\Controllers\PackageController::class);
+Route::apiResource('products', App\Http\Controllers\ProductController::class);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
+    Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
+});
+
 Route::post('images', [App\Http\Controllers\ImageController::class, 'store']);
