@@ -19,6 +19,7 @@ class Product extends Model
         'brand',
         'color',
         'sku',
+        'variants',
         'supplier_id',
         'package_id',
     ];
@@ -26,6 +27,7 @@ class Product extends Model
     protected $casts = [
         'is_set' => 'boolean',
         'stock' => 'integer',
+        'variants' => 'array',
     ];
 
     public function supplier(): BelongsTo

@@ -10,9 +10,17 @@ use Illuminate\Validation\Rule;
 
 class InventoryController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(InventoryResource::collection(Inventory::latest()->paginate(20)));
+        $user = $request->user();
+
+        $query = Inventory::where('shop_id', $user->shop_id);
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->input('type'));
+        }
+
+        return response()->json(InventoryResource::collection($query->latest()->paginate(20)));
     }
 
     public function store(Request $request): JsonResponse

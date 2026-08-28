@@ -15,6 +15,7 @@ class Package extends Model
         'category_id',
         'name',
         'amount_of_product',
+        'product_limit',
         'description',
         'location',
         'stock_status',
@@ -22,6 +23,7 @@ class Package extends Model
 
     protected $casts = [
         'amount_of_product' => 'integer',
+        'product_limit' => 'integer',
     ];
 
     public function category(): BelongsTo

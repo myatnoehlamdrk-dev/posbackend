@@ -15,11 +15,13 @@ class Category extends Model
         'inventory_id',
         'name',
         'amount_of_package',
+        'package_limit',
         'description',
     ];
 
     protected $casts = [
         'amount_of_package' => 'integer',
+        'package_limit' => 'integer',
     ];
 
     public function inventory(): BelongsTo
