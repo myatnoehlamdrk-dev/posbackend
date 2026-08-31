@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class ImgBBService
 {
@@ -22,7 +23,7 @@ class ImgBBService
      * Upload an image to ImgBB.
      *
      * @param  UploadedFile|string  $image  An UploadedFile (binary) or a base64/data-URI/remote-URL string.
-     * @return array{url: string, display_url: string, delete_url: string}
+     * @return array{url: string, display_url: string, delete_url: string, delete_hash: string}
      *
      * @throws RequestException
      */
@@ -53,25 +54,66 @@ class ImgBBService
             'url' => $data['url'] ?? throw new RequestException($response),
             'display_url' => $data['display_url'] ?? $data['url'],
             'delete_url' => $data['delete_url'] ?? '',
+            'delete_hash' => $data['delete_hash'] ?? '',
         ];
     }
 
     /**
-     * Delete a previously uploaded image using the delete_url returned by ImgBB.
+     * Delete an image by its delete hash using the ImgBB API.
      */
-    public function delete(string $deleteUrl): bool
+    public function delete(string $deleteUrl, ?string $deleteHash = null): bool
     {
-        if (blank($deleteUrl)) {
+        if (blank($deleteUrl) && blank($deleteHash)) {
+            return false;
+        }
+
+        $hash = $deleteHash ?? $this->extractDeleteHash($deleteUrl);
+
+        if (blank($hash)) {
+            Log::warning('ImgBB delete: could not extract delete hash', ['delete_url' => $deleteUrl]);
             return false;
         }
 
         try {
-            Http::get($deleteUrl)->throw();
+            $response = Http::acceptJson()
+                ->asForm()
+                ->post('https://api.imgbb.com/1/image/delete', [
+                    'key' => $this->apiKey,
+                    'delete_hash' => $hash,
+                ]);
+
+            $response->throw();
+
+            Log::info('ImgBB image deleted successfully', [
+                'delete_hash' => $hash,
+                'response' => $response->json(),
+            ]);
 
             return true;
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
+            Log::error('ImgBB image deletion failed', [
+                'delete_hash' => $hash,
+                'error' => $e->getMessage(),
+                'response' => $e->response?->body(),
+            ]);
             return false;
         }
+    }
+
+    /**
+     * Extract the delete hash from a delete_url like
+     * https://ibb.co/wNhGRgfn/b90d5a335617e7de0432bb8a3d409a08
+     */
+    protected function extractDeleteHash(string $deleteUrl): ?string
+    {
+        $path = parse_url($deleteUrl, PHP_URL_PATH);
+        if ($path === null || $path === false) {
+            return null;
+        }
+
+        $segments = array_filter(explode('/', trim($path, '/')));
+
+        return end($segments) ?: null;
     }
 
     /**

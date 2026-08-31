@@ -13,6 +13,7 @@ class ProductResource extends JsonResource
             'isSet' => (bool) $this->is_set,
             'name' => $this->name,
             'image' => $this->image ?? '',
+            'imageDeleteUrl' => $this->image_delete_url ?? '',
             'stock' => $this->stock,
             'size' => $this->size ?? '',
             'brand' => $this->brand ?? '',
@@ -32,7 +33,11 @@ class ProductResource extends JsonResource
                 return optional($this->supplier)->name ?? '';
             }),
             'supplierId' => $this->supplier_id ? (string) $this->supplier_id : null,
+            'supplierContact' => $this->supplier_contact ?? '',
+            'supplierSince' => $this->supplier_since ?? '',
+            'supplierAddress' => $this->supplier_address ?? '',
             'packageId' => $this->package_id ? (string) $this->package_id : null,
+            'active' => (bool) $this->active,
         ];
     }
 }

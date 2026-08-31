@@ -14,6 +14,7 @@ class Product extends Model
         'is_set',
         'name',
         'image',
+        'image_delete_url',
         'stock',
         'size',
         'brand',
@@ -21,7 +22,11 @@ class Product extends Model
         'sku',
         'variants',
         'supplier_id',
+        'supplier_contact',
+        'supplier_since',
+        'supplier_address',
         'package_id',
+        'active',
     ];
 
     protected $casts = [
