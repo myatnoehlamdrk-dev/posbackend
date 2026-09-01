@@ -23,7 +23,9 @@ class SaleResource extends JsonResource
             'payMethod' => $this->pay_method ?? '',
             'items' => $this->items ?? [],
             'grandTotal' => $this->grand_total ?? 0,
+            'discount' => $this->discount ?? 0,
             'notes' => $this->notes ?? '',
+            'createdAt' => $this->created_at?->toISOString(),
         ];
     }
 }

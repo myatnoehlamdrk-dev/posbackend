@@ -66,6 +66,7 @@ class SaleController extends Controller
             'pay_method' => $data['payMethod'] ?? null,
             'items' => $data['items'],
             'grand_total' => $data['grandTotal'],
+            'discount' => $data['discount'] ?? 0,
             'notes' => $data['notes'] ?? null,
         ]);
 
