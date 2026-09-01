@@ -13,14 +13,17 @@ class SaleResource extends JsonResource
             'userId' => $this->user_id ? (string) $this->user_id : null,
             'userName' => $this->user_name,
             'voucherNo' => $this->voucher_no ?? '',
-            'productId' => $this->product_id ? (string) $this->product_id : null,
-            'productName' => $this->product_name,
             'orderId' => $this->order_id ?? '',
-            'quantitySold' => $this->quantity_sold,
-            'totalPrice' => $this->total_price,
+            'productId' => $this->product_id ?? '',
+            'productName' => $this->product_name ?? '',
+            'quantitySold' => $this->quantity_sold ?? '',
+            'totalPrice' => $this->total_price ?? 0,
             'pricePerUnit' => $this->price_per_unit ?? [],
             'customerName' => $this->customer_name ?? '',
             'payMethod' => $this->pay_method ?? '',
+            'items' => $this->items ?? [],
+            'grandTotal' => $this->grand_total ?? 0,
+            'notes' => $this->notes ?? '',
         ];
     }
 }

@@ -21,17 +21,22 @@ class SaleController extends Controller
         $data = $request->validate([
             'userId' => ['nullable', 'integer', 'exists:users,id'],
             'userName' => ['required', 'string', 'max:255'],
-            'voucherNo' => ['nullable', 'string', 'max:255'],
-            'productId' => ['nullable', 'integer', 'exists:products,id'],
-            'productName' => ['required', 'string', 'max:255'],
-            'orderId' => ['nullable', 'string', 'max:255'],
-            'quantitySold' => ['required', 'integer', 'min:1'],
-            'totalPrice' => ['required', 'numeric', 'min:0'],
-            'pricePerUnit' => ['nullable', 'array'],
-            'pricePerUnit.*.name' => ['nullable', 'string'],
-            'pricePerUnit.*.price' => ['nullable', 'numeric'],
+            'voucherNo' => ['required', 'string', 'max:255'],
+            'orderId' => ['required', 'string', 'max:255'],
             'customerName' => ['nullable', 'string', 'max:255'],
             'payMethod' => ['nullable', 'string', 'max:255'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.productId' => ['nullable', 'integer'],
+            'items.*.productName' => ['required', 'string'],
+            'items.*.quantity' => ['required', 'integer', 'min:1'],
+            'items.*.unitPrice' => ['required', 'numeric', 'min:0'],
+            'items.*.subtotal' => ['required', 'numeric', 'min:0'],
+            'items.*.size' => ['nullable', 'string'],
+            'items.*.color' => ['nullable', 'string'],
+            'items.*.notes' => ['nullable', 'string'],
+            'grandTotal' => ['required', 'numeric', 'min:0'],
+            'discount' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'notes' => ['nullable', 'string'],
         ]);
 
         $userId = $data['userId'] ?? null;
@@ -39,26 +44,38 @@ class SaleController extends Controller
             $userId = User::where('name', $data['userName'])->value('id');
         }
 
-        $productId = $data['productId'] ?? null;
-        if (empty($productId) && !empty($data['productName'])) {
-            $productId = Product::where('name', $data['productName'])->value('id');
-        }
+        $productIds = collect($data['items'])->pluck('productId')->filter()->implode(',');
+        $productNames = collect($data['items'])->pluck('productName')->implode(',');
+        $quantities = collect($data['items'])->pluck('quantity')->implode(',');
+        $pricePerUnit = collect($data['items'])->map(fn($item) => [
+            'name' => $item['productName'],
+            'price' => $item['unitPrice'],
+        ])->toArray();
 
         $sale = Sale::create([
             'user_id' => $userId,
             'user_name' => $data['userName'],
-            'voucher_no' => $data['voucherNo'] ?? null,
-            'product_id' => $productId,
-            'product_name' => $data['productName'],
-            'order_id' => $data['orderId'] ?? null,
-            'quantity_sold' => $data['quantitySold'],
-            'total_price' => $data['totalPrice'],
-            'price_per_unit' => $data['pricePerUnit'] ?? null,
+            'voucher_no' => $data['voucherNo'],
+            'order_id' => $data['orderId'],
+            'product_id' => $productIds ?: null,
+            'product_name' => $productNames,
+            'quantity_sold' => $quantities,
+            'total_price' => $data['grandTotal'],
+            'price_per_unit' => $pricePerUnit,
             'customer_name' => $data['customerName'] ?? null,
             'pay_method' => $data['payMethod'] ?? null,
+            'items' => $data['items'],
+            'grand_total' => $data['grandTotal'],
+            'notes' => $data['notes'] ?? null,
         ]);
 
-        return response()->json(new SaleResource($sale), 201);
+        $random5 = str_pad(random_int(10000, 99999), 5, '0', STR_PAD_LEFT);
+        $sale->update([
+            'voucher_no' => 'INV-'.$sale->id.'-'.$random5,
+            'order_id' => 'ORD-'.$sale->id.'-'.$random5,
+        ]);
+
+        return response()->json(new SaleResource($sale->fresh()), 201);
     }
 
     public function show(Sale $sale): JsonResponse

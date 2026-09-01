@@ -22,12 +22,17 @@ class Sale extends Model
         'price_per_unit',
         'customer_name',
         'pay_method',
+        'items',
+        'grand_total',
+        'discount',
+        'notes',
     ];
 
     protected $casts = [
-        'quantity_sold' => 'integer',
-        'total_price' => 'integer',
+        'items' => 'array',
         'price_per_unit' => 'array',
+        'grand_total' => 'integer',
+        'discount' => 'integer',
     ];
 
     public function user(): BelongsTo

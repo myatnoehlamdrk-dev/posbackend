@@ -27,6 +27,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
     Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
     Route::apiResource('sales', App\Http\Controllers\SaleController::class);
+
+    Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
+    Route::put('settings', [App\Http\Controllers\SettingController::class, 'update']);
 });
 
 Route::post('images', [App\Http\Controllers\ImageController::class, 'store']);
