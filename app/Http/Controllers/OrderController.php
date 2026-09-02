@@ -3,17 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Exceptions\InsufficientStockException;
-use App\Http\Resources\SaleResource;
-use App\Models\Product;
-use App\Models\Sale;
-use App\Models\SaleItem;
+use App\Http\Resources\OrderResource;
+use App\Models\Order;
 use App\Models\User;
 use App\Services\StockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
-class SaleController extends Controller
+class OrderController extends Controller
 {
     public function __construct(
         private readonly StockService $stockService,
@@ -21,7 +19,7 @@ class SaleController extends Controller
 
     public function index(): JsonResponse
     {
-        return response()->json(SaleResource::collection(Sale::with('saleItems')->latest()->paginate(20)));
+        return response()->json(OrderResource::collection(Order::latest()->paginate(20)));
     }
 
     public function store(Request $request): JsonResponse
@@ -46,10 +44,11 @@ class SaleController extends Controller
             'grandTotal' => ['required', 'numeric', 'min:0'],
             'discount' => ['nullable', 'integer', 'min:0', 'max:100'],
             'notes' => ['nullable', 'string'],
+            'status' => ['nullable', 'string', 'in:draft,finished'],
         ]);
 
         try {
-            $sale = DB::transaction(function () use ($data, $request) {
+            $order = DB::transaction(function () use ($data) {
                 $userId = $data['userId'] ?? null;
                 if (empty($userId) && !empty($data['userName'])) {
                     $userId = User::where('name', $data['userName'])->value('id');
@@ -63,7 +62,7 @@ class SaleController extends Controller
                     'price' => $item['unitPrice'],
                 ])->toArray();
 
-                $sale = Sale::create([
+                $order = Order::create([
                     'user_id' => $userId,
                     'user_name' => $data['userName'],
                     'voucher_no' => $data['voucherNo'],
@@ -80,27 +79,14 @@ class SaleController extends Controller
                     'grand_total' => $data['grandTotal'],
                     'discount' => $data['discount'] ?? 0,
                     'notes' => $data['notes'] ?? null,
+                    'status' => $data['status'] ?? 'draft',
                 ]);
 
                 $random5 = str_pad(random_int(10000, 99999), 5, '0', STR_PAD_LEFT);
-                $sale->update([
-                    'voucher_no' => 'INV-'.$sale->id.'-'.$random5,
-                    'order_id' => 'ORD-'.$sale->id.'-'.$random5,
+                $order->update([
+                    'voucher_no' => 'INV-'.$order->id.'-'.$random5,
+                    'order_id' => 'ORD-'.$order->id.'-'.$random5,
                 ]);
-
-                foreach ($data['items'] as $item) {
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_id' => $item['productId'] ?? null,
-                        'product_name' => $item['productName'],
-                        'quantity' => $item['quantity'],
-                        'unit_price' => $item['unitPrice'],
-                        'subtotal' => $item['subtotal'],
-                        'size' => $item['size'] ?? null,
-                        'color' => $item['color'] ?? null,
-                        'notes' => $item['notes'] ?? null,
-                    ]);
-                }
 
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
@@ -108,7 +94,7 @@ class SaleController extends Controller
                     }
                 }
 
-                return $sale;
+                return $order;
             });
         } catch (InsufficientStockException $e) {
             return response()->json([
@@ -119,73 +105,53 @@ class SaleController extends Controller
             ], 422);
         }
 
-        return response()->json(new SaleResource($sale->fresh(['saleItems'])), 201);
+        return response()->json(new OrderResource($order->fresh()), 201);
     }
 
-    public function show(Sale $sale): JsonResponse
+    public function show(Order $order): JsonResponse
     {
-        return response()->json(new SaleResource($sale));
+        return response()->json(new OrderResource($order));
     }
 
-    public function update(Request $request, Sale $sale): JsonResponse
+    public function update(Request $request, Order $order): JsonResponse
     {
         $data = $request->validate([
-            'userId' => ['nullable', 'integer', 'exists:users,id'],
-            'userName' => ['sometimes', 'required', 'string', 'max:255'],
-            'voucherNo' => ['nullable', 'string', 'max:255'],
-            'productId' => ['nullable', 'integer', 'exists:products,id'],
-            'productName' => ['sometimes', 'required', 'string', 'max:255'],
-            'orderId' => ['nullable', 'string', 'max:255'],
-            'quantitySold' => ['nullable', 'integer', 'min:1'],
-            'totalPrice' => ['nullable', 'numeric', 'min:0'],
-            'pricePerUnit' => ['nullable', 'array'],
-            'pricePerUnit.*.name' => ['nullable', 'string'],
-            'pricePerUnit.*.price' => ['nullable', 'numeric'],
-            'customerName' => ['nullable', 'string', 'max:255'],
-            'customerPhone' => ['nullable', 'string', 'max:255'],
+            'status' => ['sometimes', 'string', 'in:draft,finished,cancelled'],
             'payMethod' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $userId = $data['userId'] ?? $sale->user_id;
-        if (array_key_exists('userName', $data)) {
-            $userId = User::where('name', $data['userName'])->value('id') ?? $userId;
-        }
+        $oldStatus = $order->status;
+        $newStatus = $data['status'] ?? $oldStatus;
 
-        $productId = $data['productId'] ?? $sale->product_id;
-        if (array_key_exists('productName', $data)) {
-            $productId = Product::where('name', $data['productName'])->value('id') ?? $productId;
-        }
+        DB::transaction(function () use ($order, $data, $oldStatus, $newStatus) {
+            $order->update($data);
 
-        $sale->update([
-            'user_id' => $userId,
-            'user_name' => $data['userName'] ?? $sale->user_name,
-            'voucher_no' => $data['voucherNo'] ?? $sale->voucher_no,
-            'product_id' => $productId,
-            'product_name' => $data['productName'] ?? $sale->product_name,
-            'order_id' => $data['orderId'] ?? $sale->order_id,
-            'quantity_sold' => $data['quantitySold'] ?? $sale->quantity_sold,
-            'total_price' => $data['totalPrice'] ?? $sale->total_price,
-            'price_per_unit' => $data['pricePerUnit'] ?? $sale->price_per_unit,
-            'customer_name' => $data['customerName'] ?? $sale->customer_name,
-            'customer_phone' => $data['customerPhone'] ?? $sale->customer_phone,
-            'pay_method' => $data['payMethod'] ?? $sale->pay_method,
-        ]);
+            if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
+                foreach ($order->items as $item) {
+                    if (!empty($item['productId'])) {
+                        $this->stockService->restore($item['productId'], $item['quantity']);
+                    }
+                }
+            }
+        });
 
-        return response()->json(new SaleResource($sale));
+        return response()->json(new OrderResource($order->fresh()));
     }
 
-    public function destroy(Sale $sale): JsonResponse
+    public function destroy(Order $order): JsonResponse
     {
-        DB::transaction(function () use ($sale) {
-            foreach ($sale->items as $item) {
-                if (!empty($item['productId'])) {
-                    $this->stockService->restore($item['productId'], $item['quantity']);
+        DB::transaction(function () use ($order) {
+            if ($order->status !== 'cancelled') {
+                foreach ($order->items as $item) {
+                    if (!empty($item['productId'])) {
+                        $this->stockService->restore($item['productId'], $item['quantity']);
+                    }
                 }
             }
 
-            $sale->delete();
+            $order->delete();
         });
 
-        return response()->json(['message' => 'Sale deleted successfully.']);
+        return response()->json(['message' => 'Order deleted successfully.']);
     }
 }

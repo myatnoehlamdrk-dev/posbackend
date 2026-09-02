@@ -14,6 +14,7 @@ class SettingResource extends JsonResource
             'themeMode' => $this->theme_mode,
             'language' => $this->language,
             'shopType' => $this->shop_type,
+            'shopImage' => $this->shop_image ?? '',
         ];
     }
 }

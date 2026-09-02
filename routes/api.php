@@ -23,10 +23,13 @@ Route::apiResource('suppliers', App\Http\Controllers\SupplierController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('packages', App\Http\Controllers\PackageController::class);
+    Route::get('products/search', [App\Http\Controllers\ProductController::class, 'search']);
     Route::apiResource('products', App\Http\Controllers\ProductController::class);
     Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
     Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
     Route::apiResource('sales', App\Http\Controllers\SaleController::class);
+    Route::apiResource('orders', App\Http\Controllers\OrderController::class);
+    Route::apiResource('purchase-items', App\Http\Controllers\PurchaseItemController::class);
 
     Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
     Route::put('settings', [App\Http\Controllers\SettingController::class, 'update']);

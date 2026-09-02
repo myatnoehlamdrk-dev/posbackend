@@ -15,6 +15,7 @@ class ProductResource extends JsonResource
             'image' => $this->image ?? '',
             'imageDeleteUrl' => $this->image_delete_url ?? '',
             'stock' => $this->stock,
+            'stockAvailable' => $this->stock > 0,
             'size' => $this->size ?? '',
             'brand' => $this->brand ?? '',
             'color' => $this->color ?? '',

@@ -4,7 +4,7 @@ namespace App\Http\Resources;
 
 use Illuminate\Http\Resources\Json\JsonResource;
 
-class SaleResource extends JsonResource
+class OrderResource extends JsonResource
 {
     public function toArray($request): array
     {
@@ -23,10 +23,10 @@ class SaleResource extends JsonResource
             'customerPhone' => $this->customer_phone ?? '',
             'payMethod' => $this->pay_method ?? '',
             'items' => $this->items ?? [],
-            'saleItems' => SaleItemResource::collection($this->whenLoaded('saleItems')),
             'grandTotal' => $this->grand_total ?? 0,
             'discount' => $this->discount ?? 0,
             'notes' => $this->notes ?? '',
+            'status' => $this->status ?? 'draft',
             'createdAt' => $this->created_at?->toISOString(),
         ];
     }

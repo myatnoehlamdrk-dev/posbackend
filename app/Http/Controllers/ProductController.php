@@ -30,7 +30,31 @@ class ProductController extends Controller
             $query->where('package_id', $request->integer('packageId'));
         }
 
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('brand', 'like', "%{$search}%")
+                  ->orWhere('sku', 'like', "%{$search}%");
+            });
+        }
+
         return response()->json(ProductResource::collection($query->latest()->paginate(20)));
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        $search = $request->input('q', '');
+        $user = $request->user();
+
+        $products = Product::query()
+            ->where('active', true)
+            ->where('name', 'like', "%{$search}%")
+            ->with('supplier')
+            ->limit(20)
+            ->get();
+
+        return response()->json(ProductResource::collection($products));
     }
 
     public function store(Request $request): JsonResponse
@@ -67,6 +91,42 @@ class ProductController extends Controller
         $supplierId = $data['supplierId'] ?? null;
         if (empty($supplierId) && !empty($data['supplierName'])) {
             $supplierId = Supplier::firstOrCreate(['name' => $data['supplierName']])->id;
+        }
+
+        $existingProduct = Product::where('name', $data['name'])->first();
+
+        if ($existingProduct) {
+            $existingProduct->increment('stock', $stock ?? 0);
+
+            if (!empty($supplierId)) {
+                $existingProduct->update([
+                    'supplier_id' => $supplierId,
+                    'supplier_contact' => $data['supplierContact'] ?? $existingProduct->supplier_contact,
+                    'supplier_since' => $data['supplierSince'] ?? $existingProduct->supplier_since,
+                    'supplier_address' => $data['supplierAddress'] ?? $existingProduct->supplier_address,
+                ]);
+            }
+
+            if (!empty($data['size'])) {
+                $existingProduct->update(['size' => $data['size']]);
+            }
+            if (!empty($data['color'])) {
+                $existingProduct->update(['color' => $data['color']]);
+            }
+            if (!empty($data['brand'])) {
+                $existingProduct->update(['brand' => $data['brand']]);
+            }
+            if (!empty($data['sku'])) {
+                $existingProduct->update(['sku' => $data['sku']]);
+            }
+
+            if ($variants !== null) {
+                $existingVariants = $existingProduct->variants ?? [];
+                $mergedVariants = array_merge($existingVariants, $variants);
+                $existingProduct->update(['variants' => $mergedVariants]);
+            }
+
+            return response()->json(new ProductResource($existingProduct));
         }
 
         $product = Product::create([

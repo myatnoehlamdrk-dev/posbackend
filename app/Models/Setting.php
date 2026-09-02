@@ -15,6 +15,7 @@ class Setting extends Model
         'theme_mode',
         'language',
         'shop_type',
+        'shop_image',
     ];
 
     public function user(): BelongsTo
