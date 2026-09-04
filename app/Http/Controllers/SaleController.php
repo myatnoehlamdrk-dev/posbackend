@@ -2,190 +2,40 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\InsufficientStockException;
-use App\Http\Resources\SaleResource;
-use App\Models\Product;
+use App\Http\Requests\StoreSaleRequest;
+use App\Http\Requests\UpdateSaleRequest;
 use App\Models\Sale;
-use App\Models\SaleItem;
-use App\Models\User;
-use App\Services\StockService;
+use App\Services\SaleService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class SaleController extends Controller
 {
     public function __construct(
-        private readonly StockService $stockService,
+        private readonly SaleService $saleService,
     ) {}
 
     public function index(): JsonResponse
     {
-        return response()->json(SaleResource::collection(Sale::with('saleItems')->latest()->paginate(20)));
+        return $this->saleService->list();
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreSaleRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'userId' => ['nullable', 'integer', 'exists:users,id'],
-            'userName' => ['required', 'string', 'max:255'],
-            'voucherNo' => ['required', 'string', 'max:255'],
-            'orderId' => ['required', 'string', 'max:255'],
-            'customerName' => ['nullable', 'string', 'max:255'],
-            'customerPhone' => ['nullable', 'string', 'max:255'],
-            'payMethod' => ['nullable', 'string', 'max:255'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.productId' => ['nullable', 'integer'],
-            'items.*.productName' => ['required', 'string'],
-            'items.*.quantity' => ['required', 'integer', 'min:1'],
-            'items.*.unitPrice' => ['required', 'numeric', 'min:0'],
-            'items.*.subtotal' => ['required', 'numeric', 'min:0'],
-            'items.*.size' => ['nullable', 'string'],
-            'items.*.color' => ['nullable', 'string'],
-            'items.*.notes' => ['nullable', 'string'],
-            'grandTotal' => ['required', 'numeric', 'min:0'],
-            'discount' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'notes' => ['nullable', 'string'],
-        ]);
-
-        try {
-            $sale = DB::transaction(function () use ($data, $request) {
-                $userId = $data['userId'] ?? null;
-                if (empty($userId) && !empty($data['userName'])) {
-                    $userId = User::where('name', $data['userName'])->value('id');
-                }
-
-                $productIds = collect($data['items'])->pluck('productId')->filter()->implode(',');
-                $productNames = collect($data['items'])->pluck('productName')->implode(',');
-                $quantities = collect($data['items'])->pluck('quantity')->implode(',');
-                $pricePerUnit = collect($data['items'])->map(fn($item) => [
-                    'name' => $item['productName'],
-                    'price' => $item['unitPrice'],
-                ])->toArray();
-
-                $sale = Sale::create([
-                    'user_id' => $userId,
-                    'user_name' => $data['userName'],
-                    'voucher_no' => $data['voucherNo'],
-                    'order_id' => $data['orderId'],
-                    'product_id' => $productIds ?: null,
-                    'product_name' => $productNames,
-                    'quantity_sold' => $quantities,
-                    'total_price' => $data['grandTotal'],
-                    'price_per_unit' => $pricePerUnit,
-                    'customer_name' => $data['customerName'] ?? null,
-                    'customer_phone' => $data['customerPhone'] ?? null,
-                    'pay_method' => $data['payMethod'] ?? null,
-                    'items' => $data['items'],
-                    'grand_total' => $data['grandTotal'],
-                    'discount' => $data['discount'] ?? 0,
-                    'notes' => $data['notes'] ?? null,
-                ]);
-
-                $random5 = str_pad(random_int(10000, 99999), 5, '0', STR_PAD_LEFT);
-                $sale->update([
-                    'voucher_no' => 'INV-'.$sale->id.'-'.$random5,
-                    'order_id' => 'ORD-'.$sale->id.'-'.$random5,
-                ]);
-
-                foreach ($data['items'] as $item) {
-                    SaleItem::create([
-                        'sale_id' => $sale->id,
-                        'product_id' => $item['productId'] ?? null,
-                        'product_name' => $item['productName'],
-                        'quantity' => $item['quantity'],
-                        'unit_price' => $item['unitPrice'],
-                        'subtotal' => $item['subtotal'],
-                        'size' => $item['size'] ?? null,
-                        'color' => $item['color'] ?? null,
-                        'notes' => $item['notes'] ?? null,
-                    ]);
-                }
-
-                foreach ($data['items'] as $item) {
-                    if (!empty($item['productId'])) {
-                        $this->stockService->deduct($item['productId'], $item['quantity']);
-                    }
-                }
-
-                return $sale;
-            });
-        } catch (InsufficientStockException $e) {
-            return response()->json([
-                'message' => $e->getMessage(),
-                'product' => $e->productName(),
-                'requested' => $e->requested(),
-                'available' => $e->available(),
-            ], 422);
-        }
-
-        return response()->json(new SaleResource($sale->fresh(['saleItems'])), 201);
+        return $this->saleService->create($request->validated());
     }
 
     public function show(Sale $sale): JsonResponse
     {
-        return response()->json(new SaleResource($sale));
+        return $this->saleService->show($sale);
     }
 
-    public function update(Request $request, Sale $sale): JsonResponse
+    public function update(UpdateSaleRequest $request, Sale $sale): JsonResponse
     {
-        $data = $request->validate([
-            'userId' => ['nullable', 'integer', 'exists:users,id'],
-            'userName' => ['sometimes', 'required', 'string', 'max:255'],
-            'voucherNo' => ['nullable', 'string', 'max:255'],
-            'productId' => ['nullable', 'integer', 'exists:products,id'],
-            'productName' => ['sometimes', 'required', 'string', 'max:255'],
-            'orderId' => ['nullable', 'string', 'max:255'],
-            'quantitySold' => ['nullable', 'integer', 'min:1'],
-            'totalPrice' => ['nullable', 'numeric', 'min:0'],
-            'pricePerUnit' => ['nullable', 'array'],
-            'pricePerUnit.*.name' => ['nullable', 'string'],
-            'pricePerUnit.*.price' => ['nullable', 'numeric'],
-            'customerName' => ['nullable', 'string', 'max:255'],
-            'customerPhone' => ['nullable', 'string', 'max:255'],
-            'payMethod' => ['nullable', 'string', 'max:255'],
-        ]);
-
-        $userId = $data['userId'] ?? $sale->user_id;
-        if (array_key_exists('userName', $data)) {
-            $userId = User::where('name', $data['userName'])->value('id') ?? $userId;
-        }
-
-        $productId = $data['productId'] ?? $sale->product_id;
-        if (array_key_exists('productName', $data)) {
-            $productId = Product::where('name', $data['productName'])->value('id') ?? $productId;
-        }
-
-        $sale->update([
-            'user_id' => $userId,
-            'user_name' => $data['userName'] ?? $sale->user_name,
-            'voucher_no' => $data['voucherNo'] ?? $sale->voucher_no,
-            'product_id' => $productId,
-            'product_name' => $data['productName'] ?? $sale->product_name,
-            'order_id' => $data['orderId'] ?? $sale->order_id,
-            'quantity_sold' => $data['quantitySold'] ?? $sale->quantity_sold,
-            'total_price' => $data['totalPrice'] ?? $sale->total_price,
-            'price_per_unit' => $data['pricePerUnit'] ?? $sale->price_per_unit,
-            'customer_name' => $data['customerName'] ?? $sale->customer_name,
-            'customer_phone' => $data['customerPhone'] ?? $sale->customer_phone,
-            'pay_method' => $data['payMethod'] ?? $sale->pay_method,
-        ]);
-
-        return response()->json(new SaleResource($sale));
+        return $this->saleService->update($request->validated(), $sale);
     }
 
     public function destroy(Sale $sale): JsonResponse
     {
-        DB::transaction(function () use ($sale) {
-            foreach ($sale->items as $item) {
-                if (!empty($item['productId'])) {
-                    $this->stockService->restore($item['productId'], $item['quantity']);
-                }
-            }
-
-            $sale->delete();
-        });
-
-        return response()->json(['message' => 'Sale deleted successfully.']);
+        return $this->saleService->delete($sale);
     }
 }

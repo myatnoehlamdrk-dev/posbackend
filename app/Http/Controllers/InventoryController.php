@@ -2,68 +2,41 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\InventoryResource;
+use App\Http\Requests\StoreInventoryRequest;
+use App\Http\Requests\UpdateInventoryRequest;
 use App\Models\Inventory;
+use App\Services\InventoryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 
 class InventoryController extends Controller
 {
+    public function __construct(
+        private readonly InventoryService $inventoryService,
+    ) {}
+
     public function index(Request $request): JsonResponse
     {
-        $user = $request->user();
-
-        $query = Inventory::where('shop_id', $user->shop_id);
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->input('type'));
-        }
-
-        return response()->json(InventoryResource::collection($query->latest()->paginate(20)));
+        return $this->inventoryService->listForShop($request);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreInventoryRequest $request): JsonResponse
     {
-        $user = $request->user();
-        $data = $request->validate([
-            'type' => ['required', Rule::in(['self', 'public'])],
-        ]);
-
-        $inventory = Inventory::firstOrCreate(
-            ['shop_id' => $user->shop_id, 'type' => $data['type']],
-            ['amount_category' => 25]
-        );
-
-        return response()->json(new InventoryResource($inventory), 201);
+        return $this->inventoryService->create($request->user()->shop_id, $request->validated()['type']);
     }
 
     public function show(Inventory $inventory): JsonResponse
     {
-        return response()->json(new InventoryResource($inventory));
+        return $this->inventoryService->show($inventory);
     }
 
-    public function update(Request $request, Inventory $inventory): JsonResponse
+    public function update(UpdateInventoryRequest $request, Inventory $inventory): JsonResponse
     {
-        $data = $request->validate([
-            'shopId' => ['sometimes', 'required', 'integer', 'exists:shops,id'],
-            'type' => ['nullable', 'string'],
-            'amountCategory' => ['nullable', 'integer'],
-        ]);
-
-        $inventory->update([
-            'shop_id' => $data['shopId'] ?? $inventory->shop_id,
-            'type' => $data['type'] ?? $inventory->type,
-            'amount_category' => $data['amountCategory'] ?? $inventory->amount_category,
-        ]);
-
-        return response()->json(new InventoryResource($inventory));
+        return $this->inventoryService->update($request->validated(), $inventory);
     }
 
     public function destroy(Inventory $inventory): JsonResponse
     {
-        $inventory->delete();
-
-        return response()->json(['message' => 'Inventory deleted successfully.']);
+        return $this->inventoryService->delete($inventory);
     }
 }

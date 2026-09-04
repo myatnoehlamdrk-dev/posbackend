@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Factories\StockCalculatorFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,7 @@ class Product extends Model
     protected $fillable = [
         'is_set',
         'name',
+        'product_type',
         'image',
         'image_delete_url',
         'stock',
@@ -21,6 +23,7 @@ class Product extends Model
         'color',
         'sku',
         'variants',
+        'bundle_components',
         'supplier_id',
         'supplier_contact',
         'supplier_since',
@@ -33,6 +36,7 @@ class Product extends Model
         'is_set' => 'boolean',
         'stock' => 'integer',
         'variants' => 'array',
+        'bundle_components' => 'array',
     ];
 
     public function supplier(): BelongsTo
@@ -43,5 +47,30 @@ class Product extends Model
     public function package(): BelongsTo
     {
         return $this->belongsTo(Package::class);
+    }
+
+    public function getStockCalculatorAttribute()
+    {
+        return StockCalculatorFactory::make($this);
+    }
+
+    public function getAvailableStock(): int
+    {
+        return $this->stockCalculator->calculateStock($this);
+    }
+
+    public function isStockAvailable(int $quantity): bool
+    {
+        return $this->stockCalculator->isAvailable($this, $quantity);
+    }
+
+    public function deductStock(int $quantity): void
+    {
+        $this->stockCalculator->deduct($this, $quantity);
+    }
+
+    public function restoreStock(int $quantity): void
+    {
+        $this->stockCalculator->restore($this, $quantity);
     }
 }

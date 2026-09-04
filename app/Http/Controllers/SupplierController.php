@@ -2,53 +2,40 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Resources\SupplierResource;
+use App\Http\Requests\StoreSupplierRequest;
+use App\Http\Requests\UpdateSupplierRequest;
 use App\Models\Supplier;
+use App\Services\SupplierService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 class SupplierController extends Controller
 {
+    public function __construct(
+        private readonly SupplierService $supplierService,
+    ) {}
+
     public function index(): JsonResponse
     {
-        return response()->json(SupplierResource::collection(Supplier::latest()->paginate(20)));
+        return $this->supplierService->list();
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(StoreSupplierRequest $request): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'contact' => ['nullable', 'string'],
-            'address' => ['nullable', 'string'],
-        ]);
-
-        $supplier = Supplier::create($data);
-
-        return response()->json(new SupplierResource($supplier), 201);
+        return $this->supplierService->create($request->validated());
     }
 
     public function show(Supplier $supplier): JsonResponse
     {
-        return response()->json(new SupplierResource($supplier));
+        return $this->supplierService->show($supplier);
     }
 
-    public function update(Request $request, Supplier $supplier): JsonResponse
+    public function update(UpdateSupplierRequest $request, Supplier $supplier): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['sometimes', 'required', 'string', 'max:255'],
-            'contact' => ['nullable', 'string'],
-            'address' => ['nullable', 'string'],
-        ]);
-
-        $supplier->update($data);
-
-        return response()->json(new SupplierResource($supplier));
+        return $this->supplierService->update($request->validated(), $supplier);
     }
 
     public function destroy(Supplier $supplier): JsonResponse
     {
-        $supplier->delete();
-
-        return response()->json(['message' => 'Supplier deleted successfully.']);
+        return $this->supplierService->delete($supplier);
     }
 }
