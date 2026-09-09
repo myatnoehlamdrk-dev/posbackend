@@ -57,10 +57,13 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('dashboard')->group(function () {
+        Route::get('/all', [App\Http\Controllers\DashboardController::class, 'all']);
         Route::get('/stats', [App\Http\Controllers\DashboardController::class, 'stats']);
         Route::get('/sales-chart', [App\Http\Controllers\DashboardController::class, 'salesChart']);
         Route::get('/top-products', [App\Http\Controllers\DashboardController::class, 'topProducts']);
         Route::get('/recent-sales', [App\Http\Controllers\DashboardController::class, 'recentSales']);
+        Route::get('/category-trend', [App\Http\Controllers\DashboardController::class, 'categoryTrend']);
+        Route::get('/least-products', [App\Http\Controllers\DashboardController::class, 'leastProducts']);
     });
 });
 
