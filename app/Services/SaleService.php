@@ -8,6 +8,7 @@ use App\Models\SaleItem;
 use App\Repositories\Contracts\SaleRepositoryInterface;
 use App\Repositories\Contracts\StockRepositoryInterface;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SaleService
@@ -20,9 +21,9 @@ class SaleService
         protected OrderItemService $orderItemService,
     ) {}
 
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
-        return response()->json(SaleResource::collection($this->saleRepository->list()));
+        return response()->json(SaleResource::collection($this->saleRepository->list($request)));
     }
 
     public function create(array $data): JsonResponse
@@ -74,7 +75,12 @@ class SaleService
 
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
-                        $this->stockRepository->deduct($item['productId'], $item['quantity']);
+                        $this->stockRepository->deduct(
+                            $item['productId'],
+                            $item['quantity'],
+                            $item['size'] ?? null,
+                            $item['color'] ?? null
+                        );
                     }
                 }
 
@@ -94,7 +100,7 @@ class SaleService
 
     public function show(Sale $sale): JsonResponse
     {
-        return response()->json(new SaleResource($sale));
+        return response()->json(new SaleResource($sale->load('saleItems')));
     }
 
     public function update(array $data, Sale $sale): JsonResponse
@@ -124,15 +130,25 @@ class SaleService
             'pay_method' => $data['payMethod'] ?? $sale->pay_method,
         ]);
 
-        return response()->json(new SaleResource($updated));
+        return response()->json(new SaleResource($updated->load('saleItems')));
     }
 
     public function delete(Sale $sale): JsonResponse
     {
         DB::transaction(function () use ($sale) {
-            foreach ($sale->items as $item) {
-                if (!empty($item['productId'])) {
-                    $this->stockRepository->restore($item['productId'], $item['quantity']);
+            $sale->load('saleItems');
+            foreach ($sale->saleItems as $saleItem) {
+                if (!empty($saleItem->product_id)) {
+                    try {
+                        $this->stockRepository->restore(
+                            $saleItem->product_id,
+                            $saleItem->quantity,
+                            $saleItem->size ?? null,
+                            $saleItem->color ?? null
+                        );
+                    } catch (\Exception $e) {
+                        // Product may have been deleted; skip restore
+                    }
                 }
             }
 
@@ -140,5 +156,37 @@ class SaleService
         });
 
         return response()->json(['message' => 'Sale deleted successfully.']);
+    }
+
+    public function deleteItem(Sale $sale, \App\Models\SaleItem $saleItem): JsonResponse
+    {
+        if ($saleItem->sale_id !== $sale->id) {
+            return response()->json(['message' => 'Sale item does not belong to this sale.'], 400);
+        }
+
+        DB::transaction(function () use ($sale, $saleItem) {
+            if (!empty($saleItem->product_id)) {
+                try {
+                    $this->stockRepository->restore(
+                        $saleItem->product_id,
+                        $saleItem->quantity,
+                        $saleItem->size ?? null,
+                        $saleItem->color ?? null
+                    );
+                } catch (\Exception $e) {
+                    // Product may have been deleted; skip restore
+                }
+            }
+
+            $saleItem->delete();
+
+            $sale->load('saleItems');
+            $sale->update([
+                'total_price' => $sale->saleItems->sum('subtotal'),
+                'quantity_sold' => $sale->saleItems->sum('quantity'),
+            ]);
+        });
+
+        return response()->json(new \App\Http\Resources\SaleResource($sale->fresh()->load('saleItems')));
     }
 }

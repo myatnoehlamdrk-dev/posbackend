@@ -8,6 +8,7 @@ use App\Models\Order;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use App\Repositories\Contracts\StockRepositoryInterface;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
@@ -20,9 +21,9 @@ class OrderService
         protected OrderItemService $orderItemService,
     ) {}
 
-    public function list(): JsonResponse
+    public function list(Request $request): JsonResponse
     {
-        return response()->json(OrderResource::collection($this->orderRepository->list()));
+        return response()->json(OrderResource::collection($this->orderRepository->list($request)));
     }
 
     public function create(array $data): JsonResponse
@@ -61,7 +62,12 @@ class OrderService
 
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
-                        $this->stockRepository->deduct($item['productId'], $item['quantity']);
+                        $this->stockRepository->deduct(
+                            $item['productId'],
+                            $item['quantity'],
+                            $item['size'] ?? null,
+                            $item['color'] ?? null
+                        );
                     }
                 }
 
@@ -95,7 +101,12 @@ class OrderService
             if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
                 foreach ($order->items as $item) {
                     if (!empty($item['productId'])) {
-                        $this->stockRepository->restore($item['productId'], $item['quantity']);
+                        $this->stockRepository->restore(
+                            $item['productId'],
+                            $item['quantity'],
+                            $item['size'] ?? null,
+                            $item['color'] ?? null
+                        );
                     }
                 }
             }
@@ -110,7 +121,12 @@ class OrderService
             if ($order->status !== 'cancelled') {
                 foreach ($order->items as $item) {
                     if (!empty($item['productId'])) {
-                        $this->stockRepository->restore($item['productId'], $item['quantity']);
+                        $this->stockRepository->restore(
+                            $item['productId'],
+                            $item['quantity'],
+                            $item['size'] ?? null,
+                            $item['color'] ?? null
+                        );
                     }
                 }
             }

@@ -21,7 +21,19 @@ class SettingController extends Controller
             ]
         );
 
-        return response()->json(SettingResource::make($setting));
+        $shopImage = '';
+        $shopId = $request->user()->shop_id;
+        if ($shopId) {
+            $shop = Shop::find($shopId);
+            if ($shop) {
+                $shopImage = $shop->shop_image ?? '';
+            }
+        }
+
+        $data = SettingResource::make($setting)->toArray($request);
+        $data['shopImage'] = $shopImage;
+
+        return response()->json($data);
     }
 
     public function update(Request $request): JsonResponse

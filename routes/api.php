@@ -28,6 +28,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
     Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
     Route::apiResource('sales', App\Http\Controllers\SaleController::class);
+    Route::delete('sales/{sale}/items/{saleItem}', [App\Http\Controllers\SaleController::class, 'destroyItem']);
+    Route::get('sales/{sale}/voucher', [App\Http\Controllers\PdfController::class, 'generateVoucher']);
     Route::apiResource('orders', App\Http\Controllers\OrderController::class);
     Route::apiResource('purchase-items', App\Http\Controllers\PurchaseItemController::class);
 

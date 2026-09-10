@@ -8,6 +8,17 @@ class CategoryResource extends JsonResource
 {
     public function toArray($request): array
     {
+        $productImages = [];
+        if ($this->relationLoaded('packages')) {
+            $productImages = $this->packages
+                ->flatMap(fn ($pkg) => $pkg->relationLoaded('products') ? $pkg->products : [])
+                ->filter(fn ($p) => !empty($p->image) && $p->active == 1)
+                ->pluck('image')
+                ->take(3)
+                ->values()
+                ->toArray();
+        }
+
         return [
             'id' => (string) $this->id,
             'inventoryId' => (string) $this->inventory_id,
@@ -17,6 +28,7 @@ class CategoryResource extends JsonResource
             'packageLimit' => $this->package_limit ?? 0,
             'description' => $this->description ?? '',
             'createdAt' => $this->created_at?->toDateTimeString(),
+            'productImages' => $productImages,
         ];
     }
 }

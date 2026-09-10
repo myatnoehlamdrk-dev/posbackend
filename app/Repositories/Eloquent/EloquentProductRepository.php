@@ -38,6 +38,11 @@ class EloquentProductRepository implements ProductRepositoryInterface
             });
         }
 
+        $query->where(function ($q) use ($user) {
+            $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
+              ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id));
+        });
+
         return $query->latest()->paginate(20);
     }
 
@@ -46,7 +51,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
         return $this->model->query()
             ->where('active', true)
             ->where('name', 'like', "%{$query}%")
-            ->with('supplier')
+            ->with('supplier', 'package.category.inventory')
             ->limit(20)
             ->get();
     }

@@ -5,6 +5,7 @@ namespace App\Repositories\Eloquent;
 use App\Models\Order;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 
 class EloquentOrderRepository implements OrderRepositoryInterface
@@ -13,9 +14,14 @@ class EloquentOrderRepository implements OrderRepositoryInterface
         protected Order $model,
     ) {}
 
-    public function list(): LengthAwarePaginator
+    public function list(Request $request): LengthAwarePaginator
     {
-        return $this->model->latest()->paginate(20);
+        $shopId = $request->user()->shop_id;
+
+        return $this->model->with('user')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->latest()
+            ->paginate(20);
     }
 
     public function findById(int $id): ?Order

@@ -6,6 +6,7 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Repositories\Contracts\SaleRepositoryInterface;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\Request;
 
 class EloquentSaleRepository implements SaleRepositoryInterface
 {
@@ -13,9 +14,14 @@ class EloquentSaleRepository implements SaleRepositoryInterface
         protected Sale $model,
     ) {}
 
-    public function list(): LengthAwarePaginator
+    public function list(Request $request): LengthAwarePaginator
     {
-        return $this->model->with('saleItems')->latest()->paginate(20);
+        $shopId = $request->user()->shop_id;
+
+        return $this->model->with('saleItems')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->latest()
+            ->paginate(20);
     }
 
     public function findById(int $id): ?Sale

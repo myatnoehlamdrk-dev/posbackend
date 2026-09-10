@@ -17,7 +17,7 @@ class ExportController extends Controller
         $startDate = $request->input('startDate');
         $endDate = $request->input('endDate');
 
-        return $this->exportService->exportSales($startDate, $endDate);
+        return $this->exportService->exportSales($request, $startDate, $endDate);
     }
 
     public function orders(Request $request): JsonResponse
@@ -25,6 +25,6 @@ class ExportController extends Controller
         $startDate = $request->input('startDate');
         $endDate = $request->input('endDate');
 
-        return $this->exportService->exportOrders($startDate, $endDate);
+        return $this->exportService->exportOrders($request, $startDate, $endDate);
     }
 }

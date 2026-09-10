@@ -54,6 +54,7 @@ class ProductService
             'image' => $data['image'] ?? null,
             'image_delete_url' => $data['imageDeleteUrl'] ?? null,
             'stock' => $stock ?? 0,
+            'product_type' => (!empty($variants) && count($variants) > 0) ? 'variant' : 'simple',
             'size' => $data['size'] ?? optional(head($variants))['size'] ?? null,
             'brand' => $data['brand'] ?? null,
             'color' => $data['color'] ?? optional(head($variants))['color'] ?? null,
@@ -93,17 +94,20 @@ class ProductService
 
         $this->handleImageReplacement($data, $product);
 
+        $updatedVariants = $variants ?? $product->variants;
+
         $updated = $this->productRepository->update($product, [
             'is_set' => $data['isSet'] ?? $product->is_set,
             'name' => $data['name'] ?? $product->name,
             'image' => $data['image'] ?? $product->image,
             'image_delete_url' => $data['imageDeleteUrl'] ?? $product->image_delete_url,
             'stock' => $stock ?? $product->stock,
+            'product_type' => (!empty($updatedVariants) && count($updatedVariants) > 0) ? 'variant' : 'simple',
             'size' => $data['size'] ?? optional(head($variants))['size'] ?? $product->size,
             'brand' => $data['brand'] ?? $product->brand,
             'color' => $data['color'] ?? optional(head($variants))['color'] ?? $product->color,
             'sku' => $data['sku'] ?? $product->sku,
-            'variants' => $variants ?? $product->variants,
+            'variants' => $updatedVariants,
             'supplier_id' => $supplierId ?? $product->supplier_id,
             'supplier_contact' => $data['supplierContact'] ?? $product->supplier_contact,
             'supplier_since' => $data['supplierSince'] ?? $product->supplier_since,
@@ -146,7 +150,11 @@ class ProductService
 
         if ($variants !== null) {
             $existingVariants = $product->variants ?? [];
-            $this->productRepository->update($product, ['variants' => array_merge($existingVariants, $variants)]);
+            $mergedVariants = array_merge($existingVariants, $variants);
+            $this->productRepository->update($product, [
+                'variants' => $mergedVariants,
+                'product_type' => 'variant',
+            ]);
         }
 
         $this->linkPurchaseItem($data['purchaseItemId'] ?? null, $product->id);

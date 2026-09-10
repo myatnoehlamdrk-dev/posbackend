@@ -19,25 +19,48 @@ class EloquentStockRepository implements StockRepositoryInterface
         return true;
     }
 
-    public function deduct(int $productId, int $quantity): void
+    public function deduct(int $productId, int $quantity, ?string $size = null, ?string $color = null): void
     {
         $product = $this->product->findOrFail($productId);
 
-        if (!$product->isStockAvailable($quantity)) {
-            throw new \App\Exceptions\InsufficientStockException(
-                $product->name,
-                $quantity,
-                $product->getAvailableStock()
-            );
+        $calculator = $product->stockCalculator;
+        $available = $product->getAvailableStock();
+
+        if ($calculator instanceof \App\Calculators\VariantStockCalculator && ($size !== null || $color !== null)) {
+            if (!$calculator->isVariantAvailable($product, $quantity, $size, $color)) {
+                $variantQty = 0;
+                foreach ($product->variants ?? [] as $v) {
+                    $matchSize = ($size === null || $size === '' || ($v['size'] ?? '') === $size);
+                    $matchColor = ($color === null || $color === '' || ($v['color'] ?? '') === $color);
+                    if ($matchSize && $matchColor) {
+                        $variantQty = $v['quantity'] ?? 0;
+                        break;
+                    }
+                }
+                throw new \App\Exceptions\InsufficientStockException(
+                    $product->name,
+                    $quantity,
+                    $variantQty
+                );
+            }
+        } else {
+            if (!$product->isStockAvailable($quantity)) {
+                throw new \App\Exceptions\InsufficientStockException(
+                    $product->name,
+                    $quantity,
+                    $available
+                );
+            }
         }
 
-        $product->deductStock($quantity);
+        $product->deductStock($quantity, $size, $color);
     }
 
-    public function restore(int $productId, int $quantity): void
+    public function restore(int $productId, int $quantity, ?string $size = null, ?string $color = null): void
     {
-        $product = $this->product->findOrFail($productId);
-        $product->restoreStock($quantity);
+        $product = $this->product->find($productId);
+        if (!$product) return;
+        $product->restoreStock($quantity, $size, $color);
     }
 
     public function getStock(int $productId): int

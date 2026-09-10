@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreSaleRequest;
 use App\Http\Requests\UpdateSaleRequest;
 use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Services\SaleService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class SaleController extends Controller
 {
@@ -14,9 +16,9 @@ class SaleController extends Controller
         private readonly SaleService $saleService,
     ) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return $this->saleService->list();
+        return $this->saleService->list($request);
     }
 
     public function store(StoreSaleRequest $request): JsonResponse
@@ -37,5 +39,10 @@ class SaleController extends Controller
     public function destroy(Sale $sale): JsonResponse
     {
         return $this->saleService->delete($sale);
+    }
+
+    public function destroyItem(Sale $sale, SaleItem $saleItem): JsonResponse
+    {
+        return $this->saleService->deleteItem($sale, $saleItem);
     }
 }

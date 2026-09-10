@@ -19,10 +19,10 @@ interface StockCalculatorInterface
     /**
      * Deduct stock from the product (may affect related records).
      */
-    public function deduct(Product $product, int $quantity): void;
+    public function deduct(Product $product, int $quantity, ?string $size = null, ?string $color = null): void;
 
     /**
      * Restore stock to the product (may affect related records).
      */
-    public function restore(Product $product, int $quantity): void;
+    public function restore(Product $product, int $quantity, ?string $size = null, ?string $color = null): void;
 }

@@ -20,7 +20,7 @@ class SimpleStockCalculator implements StockCalculatorInterface
         return $this->calculateStock($product) >= $quantity;
     }
 
-    public function deduct(Product $product, int $quantity): void
+    public function deduct(Product $product, int $quantity, ?string $size = null, ?string $color = null): void
     {
         if (!$this->isAvailable($product, $quantity)) {
             throw new \App\Exceptions\InsufficientStockException(
@@ -33,7 +33,7 @@ class SimpleStockCalculator implements StockCalculatorInterface
         $product->decrement('stock', $quantity);
     }
 
-    public function restore(Product $product, int $quantity): void
+    public function restore(Product $product, int $quantity, ?string $size = null, ?string $color = null): void
     {
         $product->increment('stock', $quantity);
     }

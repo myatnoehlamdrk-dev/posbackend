@@ -5,13 +5,17 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\Sale;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Response;
 
 class ExportService
 {
-    public function exportSales(?string $startDate = null, ?string $endDate = null): JsonResponse
+    public function exportSales(Request $request, ?string $startDate = null, ?string $endDate = null): JsonResponse
     {
-        $query = Sale::with('saleItems')->latest();
+        $shopId = $request->user()->shop_id;
+        $query = Sale::with('saleItems')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->latest();
 
         if ($startDate) {
             $query->where('created_at', '>=', $startDate);
@@ -39,9 +43,10 @@ class ExportService
         return response()->json(['csv' => $csv, 'count' => $sales->count()]);
     }
 
-    public function exportOrders(?string $startDate = null, ?string $endDate = null): JsonResponse
+    public function exportOrders(Request $request, ?string $startDate = null, ?string $endDate = null): JsonResponse
     {
-        $query = Order::latest();
+        $shopId = $request->user()->shop_id;
+        $query = Order::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))->latest();
 
         if ($startDate) {
             $query->where('created_at', '>=', $startDate);

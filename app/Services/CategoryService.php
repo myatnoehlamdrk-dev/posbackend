@@ -28,12 +28,13 @@ class CategoryService
         return response()->json(CategoryResource::collection($this->categoryRepository->listForShop($request)));
     }
 
-    public function create(array $data, int $shopId): JsonResponse
+    public function create(array $data, int $shopId, ?int $userId = null): JsonResponse
     {
         $inventory = $this->inventoryService->findOrCreateForShop($shopId, $data['type']);
 
         $category = $this->categoryRepository->create([
             'inventory_id' => $inventory->id,
+            'user_id' => $userId,
             'name' => $data['name'],
             'amount_of_package' => 0,
             'package_limit' => $data['packageLimit'] ?? 0,

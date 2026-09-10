@@ -64,13 +64,13 @@ class Product extends Model
         return $this->stockCalculator->isAvailable($this, $quantity);
     }
 
-    public function deductStock(int $quantity): void
+    public function deductStock(int $quantity, ?string $size = null, ?string $color = null): void
     {
-        $this->stockCalculator->deduct($this, $quantity);
+        $this->stockCalculator->deduct($this, $quantity, $size, $color);
     }
 
-    public function restoreStock(int $quantity): void
+    public function restoreStock(int $quantity, ?string $size = null, ?string $color = null): void
     {
-        $this->stockCalculator->restore($this, $quantity);
+        $this->stockCalculator->restore($this, $quantity, $size, $color);
     }
 }

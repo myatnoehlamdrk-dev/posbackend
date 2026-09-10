@@ -13,6 +13,7 @@ class Category extends Model
 
     protected $fillable = [
         'inventory_id',
+        'user_id',
         'name',
         'amount_of_package',
         'package_limit',

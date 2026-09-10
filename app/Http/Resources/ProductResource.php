@@ -24,6 +24,9 @@ class ProductResource extends JsonResource
             'category' => $this->whenLoaded('package', function () {
                 return optional($this->package)->category?->name ?? '';
             }),
+            'categoryId' => $this->whenLoaded('package', function () {
+                return optional($this->package)->category_id ? (string) optional($this->package)->category_id : null;
+            }),
             'packageName' => $this->whenLoaded('package', function () {
                 return optional($this->package)->name ?? '';
             }),
@@ -34,8 +37,13 @@ class ProductResource extends JsonResource
                 return optional($this->supplier)->name ?? '';
             }),
             'supplierId' => $this->supplier_id ? (string) $this->supplier_id : null,
+            'contractNumber' => $this->whenLoaded('supplier', function () {
+                return optional($this->supplier)->contact ?? '';
+            }),
             'supplierContact' => $this->supplier_contact ?? '',
-            'supplierSince' => $this->supplier_since ?? '',
+            'supplierSince' => $this->whenLoaded('supplier', function () {
+                return optional($this->supplier)->created_at ? optional($this->supplier)->created_at->format('Y') : '';
+            }),
             'supplierAddress' => $this->supplier_address ?? '',
             'packageId' => $this->package_id ? (string) $this->package_id : null,
             'active' => (bool) $this->active,

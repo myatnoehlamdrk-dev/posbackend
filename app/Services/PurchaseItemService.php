@@ -11,7 +11,10 @@ class PurchaseItemService
 {
     public function list(Request $request): JsonResponse
     {
-        $query = PurchaseItem::with('supplier');
+        $shopId = $request->user()->shop_id;
+
+        $query = PurchaseItem::with('supplier', 'user')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId));
 
         if ($request->input('status') === 'pending') {
             $query->where('status', 'pending');

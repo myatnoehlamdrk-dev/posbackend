@@ -22,7 +22,7 @@ class CategoryController extends Controller
 
     public function store(StoreCategoryRequest $request): JsonResponse
     {
-        return $this->categoryService->create($request->validated(), $request->user()->shop_id);
+        return $this->categoryService->create($request->validated(), $request->user()->shop_id, $request->user()->id);
     }
 
     public function show(Category $category): JsonResponse

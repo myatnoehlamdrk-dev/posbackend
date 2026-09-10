@@ -22,23 +22,24 @@ class DashboardService
             $monthStart = Carbon::now()->startOfMonth();
 
             return [
-                'today_sales' => $this->getTodaySales($today),
-                'month_sales' => $this->getMonthSales($monthStart),
-                'pending_orders' => $this->getPendingOrders(),
+                'today_sales' => $this->getTodaySales($shopId, $today),
+                'month_sales' => $this->getMonthSales($shopId, $monthStart),
+                'pending_orders' => $this->getPendingOrders($shopId),
                 'total_products' => $this->getTotalProducts($shopId),
                 'in_stock' => $this->getInStockCount($shopId),
                 'low_stock_count' => $this->getLowStockCount($shopId),
-                'pending_purchases' => $this->getPendingPurchases(),
-                'total_sales' => $this->getAllTimeSales(),
+                'pending_purchases' => $this->getPendingPurchases($shopId),
+                'total_sales' => $this->getAllTimeSales($shopId),
             ];
         });
     }
 
-    public function getSalesChart(int $days = 7): array
+    public function getSalesChart(int $shopId, int $days = 7): array
     {
         $startDate = Carbon::now()->subDays($days)->startOfDay();
 
         $sales = Sale::where('created_at', '>=', $startDate)
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
             ->select(
                 DB::raw('DATE(created_at) as date'),
                 DB::raw('COUNT(*) as count'),
@@ -60,17 +61,18 @@ class DashboardService
             ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->where('sale_items.created_at', '>=', Carbon::now()->subDays(30))
             ->where('inventories.shop_id', $shopId)
-            ->select('products.name as product_name', DB::raw('SUM(sale_items.quantity) as total_quantity'))
-            ->groupBy('products.name')
+            ->select('products.name as product_name', 'products.image as product_image', DB::raw('SUM(sale_items.quantity) as total_quantity'))
+            ->groupBy('products.name', 'products.image')
             ->orderByDesc('total_quantity')
             ->limit($limit)
             ->get()
             ->toArray();
     }
 
-    public function getRecentSales(int $limit = 5)
+    public function getRecentSales(int $shopId, int $limit = 5)
     {
         return Sale::with('saleItems')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
             ->latest()
             ->limit($limit)
             ->get();
@@ -141,8 +143,8 @@ class DashboardService
             ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->where('sale_items.created_at', '>=', Carbon::now()->subDays(30))
             ->where('inventories.shop_id', $shopId)
-            ->select('products.name as product_name', DB::raw('SUM(sale_items.quantity) as total_quantity'))
-            ->groupBy('products.name')
+            ->select('products.name as product_name', 'products.image as product_image', DB::raw('SUM(sale_items.quantity) as total_quantity'))
+            ->groupBy('products.name', 'products.image')
             ->orderBy('total_quantity')
             ->limit($limit)
             ->get()
@@ -157,43 +159,48 @@ class DashboardService
 
             return [
                 'stats' => [
-                    'today_sales' => $this->getTodaySales($today),
-                    'month_sales' => $this->getMonthSales($monthStart),
-                    'pending_orders' => $this->getPendingOrders(),
+                    'today_sales' => $this->getTodaySales($shopId, $today),
+                    'month_sales' => $this->getMonthSales($shopId, $monthStart),
+                    'pending_orders' => $this->getPendingOrders($shopId),
                     'total_products' => $this->getTotalProducts($shopId),
                     'in_stock' => $this->getInStockCount($shopId),
                     'low_stock_count' => $this->getLowStockCount($shopId),
-                    'pending_purchases' => $this->getPendingPurchases(),
-                    'total_sales' => $this->getAllTimeSales(),
+                    'pending_purchases' => $this->getPendingPurchases($shopId),
+                    'total_sales' => $this->getAllTimeSales($shopId),
                 ],
                 'category_trend' => $this->getCategoryTrend($shopId, $days),
                 'top_products' => $this->getTopProducts($shopId, 3),
                 'least_products' => $this->getLeastProducts($shopId, 3),
+                'recent_sales' => $this->getRecentSales($shopId, 5),
             ];
         });
     }
 
-    private function getTodaySales(Carbon $today): array
+    private function getTodaySales(int $shopId, Carbon $today): array
     {
         $result = Sale::where('created_at', '>=', $today)
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(grand_total), 0) as total')
             ->first();
 
         return ['count' => $result->count, 'total' => $result->total];
     }
 
-    private function getMonthSales(Carbon $monthStart): array
+    private function getMonthSales(int $shopId, Carbon $monthStart): array
     {
         $result = Sale::where('created_at', '>=', $monthStart)
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
             ->selectRaw('COUNT(*) as count, COALESCE(SUM(grand_total), 0) as total')
             ->first();
 
         return ['count' => $result->count, 'total' => $result->total];
     }
 
-    private function getPendingOrders(): int
+    private function getPendingOrders(int $shopId): int
     {
-        return Order::where('status', 'draft')->count();
+        return Order::where('status', 'draft')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->count();
     }
 
     private function getLowStockCount(int $shopId): int
@@ -221,9 +228,9 @@ class DashboardService
             ->count();
     }
 
-    private function getAllTimeSales(): int
+    private function getAllTimeSales(int $shopId): int
     {
-        return (int) (Sale::sum('grand_total') ?? 0);
+        return (int) (Sale::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))->sum('grand_total') ?? 0);
     }
 
     private function getTotalProducts(int $shopId): int
@@ -237,8 +244,10 @@ class DashboardService
             ->count();
     }
 
-    private function getPendingPurchases(): int
+    private function getPendingPurchases(int $shopId): int
     {
-        return PurchaseItem::where('status', 'pending')->count();
+        return PurchaseItem::where('status', 'pending')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->count();
     }
 }

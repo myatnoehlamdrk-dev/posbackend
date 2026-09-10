@@ -30,7 +30,12 @@ class EloquentPackageRepository implements PackageRepositoryInterface
             });
         }
 
-        return $query->withCount('products')->latest()->paginate(20);
+        $query->where(function ($q) use ($user) {
+            $q->whereHas('category.inventory', fn ($iq) => $iq->where('type', 'public'))
+              ->orWhereHas('category', fn ($cq) => $cq->where('user_id', $user->id));
+        });
+
+        return $query->withCount('products')->with('products')->latest()->paginate(20);
     }
 
     public function findById(int $id): ?Package

@@ -28,7 +28,25 @@ class VariantStockCalculator implements StockCalculatorInterface
         return $this->calculateStock($product) >= $quantity;
     }
 
-    public function deduct(Product $product, int $quantity): void
+    public function isVariantAvailable(Product $product, int $quantity, ?string $size = null, ?string $color = null): bool
+    {
+        $variants = $product->variants ?? [];
+        if (empty($variants)) {
+            return false;
+        }
+
+        foreach ($variants as $variant) {
+            $matchSize = ($size === null || $size === '' || ($variant['size'] ?? '') === $size);
+            $matchColor = ($color === null || $color === '' || ($variant['color'] ?? '') === $color);
+            if ($matchSize && $matchColor) {
+                return ($variant['quantity'] ?? 0) >= $quantity;
+            }
+        }
+
+        return false;
+    }
+
+    public function deduct(Product $product, int $quantity, ?string $size = null, ?string $color = null): void
     {
         $variants = $product->variants ?? [];
 
@@ -36,33 +54,79 @@ class VariantStockCalculator implements StockCalculatorInterface
             return;
         }
 
-        // Use database lock to prevent race conditions
-        DB::transaction(function () use ($product, $quantity, &$variants) {
-            // Re-read fresh data under lock
+        DB::transaction(function () use ($product, $quantity, $size, $color, &$variants) {
             $freshProduct = Product::lockForUpdate()->find($product->id);
             $variants = $freshProduct->variants ?? [];
 
             $remaining = $quantity;
             $updatedVariants = [];
 
-            foreach ($variants as $variant) {
-                $variantQty = $variant['quantity'] ?? 0;
-
-                if ($remaining <= 0) {
-                    $updatedVariants[] = $variant;
-                    continue;
+            if ($size !== null || $color !== null) {
+                $matchedIndex = null;
+                foreach ($variants as $index => $variant) {
+                    $matchSize = ($size === null || $size === '' || ($variant['size'] ?? '') === $size);
+                    $matchColor = ($color === null || $color === '' || ($variant['color'] ?? '') === $color);
+                    if ($matchSize && $matchColor) {
+                        $matchedIndex = $index;
+                        break;
+                    }
                 }
 
-                $deductFromVariant = min($variantQty, $remaining);
-                $remaining -= $deductFromVariant;
+                if ($matchedIndex !== null) {
+                    $variant = $variants[$matchedIndex];
+                    $variantQty = $variant['quantity'] ?? 0;
+                    $deductFromVariant = min($variantQty, $remaining);
 
-                $updatedVariants[] = array_merge($variant, [
-                    'quantity' => $variantQty - $deductFromVariant,
-                ]);
+                    foreach ($variants as $index => $variant) {
+                        if ($index === $matchedIndex) {
+                            $updatedVariants[] = array_merge($variant, [
+                                'quantity' => ($variant['quantity'] ?? 0) - $deductFromVariant,
+                                '_last_deducted' => true,
+                            ]);
+                        } else {
+                            $updatedVariants[] = $variant;
+                        }
+                    }
+                } else {
+                    foreach ($variants as $variant) {
+                        $variantQty = $variant['quantity'] ?? 0;
 
-                if ($remaining <= 0) {
-                    // Track which variant was last used for restore
-                    $updatedVariants[count($updatedVariants) - 1]['_last_deducted'] = true;
+                        if ($remaining <= 0) {
+                            $updatedVariants[] = $variant;
+                            continue;
+                        }
+
+                        $deductFromVariant = min($variantQty, $remaining);
+                        $remaining -= $deductFromVariant;
+
+                        $updatedVariants[] = array_merge($variant, [
+                            'quantity' => $variantQty - $deductFromVariant,
+                        ]);
+
+                        if ($remaining <= 0) {
+                            $updatedVariants[count($updatedVariants) - 1]['_last_deducted'] = true;
+                        }
+                    }
+                }
+            } else {
+                foreach ($variants as $variant) {
+                    $variantQty = $variant['quantity'] ?? 0;
+
+                    if ($remaining <= 0) {
+                        $updatedVariants[] = $variant;
+                        continue;
+                    }
+
+                    $deductFromVariant = min($variantQty, $remaining);
+                    $remaining -= $deductFromVariant;
+
+                    $updatedVariants[] = array_merge($variant, [
+                        'quantity' => $variantQty - $deductFromVariant,
+                    ]);
+
+                    if ($remaining <= 0) {
+                        $updatedVariants[count($updatedVariants) - 1]['_last_deducted'] = true;
+                    }
                 }
             }
 
@@ -70,7 +134,7 @@ class VariantStockCalculator implements StockCalculatorInterface
         });
     }
 
-    public function restore(Product $product, int $quantity): void
+    public function restore(Product $product, int $quantity, ?string $size = null, ?string $color = null): void
     {
         $variants = $product->variants ?? [];
 
@@ -79,26 +143,38 @@ class VariantStockCalculator implements StockCalculatorInterface
             return;
         }
 
-        DB::transaction(function () use ($product, $quantity, &$variants) {
-            // Re-read fresh data under lock
+        DB::transaction(function () use ($product, $quantity, $size, $color, &$variants) {
             $freshProduct = Product::lockForUpdate()->find($product->id);
             $variants = $freshProduct->variants ?? [];
 
             $updatedVariants = $variants;
             $restored = false;
 
-            // Find the variant that was last deducted (has _last_deducted flag)
-            foreach ($updatedVariants as $index => &$variant) {
-                if (!empty($variant['_last_deducted'])) {
-                    $variant['quantity'] = ($variant['quantity'] ?? 0) + $quantity;
-                    unset($variant['_last_deducted']);
-                    $restored = true;
-                    break;
+            if ($size !== null || $color !== null) {
+                foreach ($updatedVariants as $index => &$variant) {
+                    $matchSize = ($size === null || $size === '' || ($variant['size'] ?? '') === $size);
+                    $matchColor = ($color === null || $color === '' || ($variant['color'] ?? '') === $color);
+                    if ($matchSize && $matchColor) {
+                        $variant['quantity'] = ($variant['quantity'] ?? 0) + $quantity;
+                        $restored = true;
+                        break;
+                    }
                 }
+                unset($variant);
             }
-            unset($variant);
 
-            // If no flagged variant found, restore to the first variant with stock
+            if (!$restored) {
+                foreach ($updatedVariants as $index => &$variant) {
+                    if (!empty($variant['_last_deducted'])) {
+                        $variant['quantity'] = ($variant['quantity'] ?? 0) + $quantity;
+                        unset($variant['_last_deducted']);
+                        $restored = true;
+                        break;
+                    }
+                }
+                unset($variant);
+            }
+
             if (!$restored) {
                 foreach ($updatedVariants as $index => &$variant) {
                     if (($variant['quantity'] ?? 0) > 0) {
@@ -110,7 +186,6 @@ class VariantStockCalculator implements StockCalculatorInterface
                 unset($variant);
             }
 
-            // Fallback: restore to first variant
             if (!$restored && !empty($updatedVariants)) {
                 $updatedVariants[0]['quantity'] = ($updatedVariants[0]['quantity'] ?? 0) + $quantity;
             }

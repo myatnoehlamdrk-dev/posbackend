@@ -43,7 +43,7 @@ class BundleStockCalculator implements StockCalculatorInterface
         return $this->calculateStock($product) >= $quantity;
     }
 
-    public function deduct(Product $product, int $quantity): void
+    public function deduct(Product $product, int $quantity, ?string $size = null, ?string $color = null): void
     {
         $components = $product->bundle_components ?? [];
 
@@ -60,7 +60,7 @@ class BundleStockCalculator implements StockCalculatorInterface
         }
     }
 
-    public function restore(Product $product, int $quantity): void
+    public function restore(Product $product, int $quantity, ?string $size = null, ?string $color = null): void
     {
         $components = $product->bundle_components ?? [];
 

@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateOrderRequest;
 use App\Models\Order;
 use App\Services\OrderService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class OrderController extends Controller
 {
@@ -14,9 +15,9 @@ class OrderController extends Controller
         private readonly OrderService $orderService,
     ) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return $this->orderService->list();
+        return $this->orderService->list($request);
     }
 
     public function store(StoreOrderRequest $request): JsonResponse

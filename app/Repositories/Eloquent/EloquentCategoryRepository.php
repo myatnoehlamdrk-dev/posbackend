@@ -23,6 +23,10 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
             $inventory = \App\Models\Inventory::where('shop_id', $user->shop_id)
                 ->findOrFail($request->integer('inventoryId'));
             $query->where('inventory_id', $inventory->id);
+
+            if ($inventory->type === 'self') {
+                $query->where('user_id', $user->id);
+            }
         } else {
             $query->whereHas('inventory', function ($q) use ($user, $request) {
                 $q->where('shop_id', $user->shop_id);
@@ -30,9 +34,14 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
                     $q->where('type', $request->input('type'));
                 }
             });
+
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('inventory', fn ($iq) => $iq->where('type', 'public'))
+                  ->orWhere('user_id', $user->id);
+            });
         }
 
-        return $query->withCount('packages')->with('inventory')->latest()->paginate(20);
+        return $query->withCount('packages')->with('inventory', 'packages.products')->latest()->paginate(20);
     }
 
     public function findById(int $id): ?Category

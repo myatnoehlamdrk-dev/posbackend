@@ -11,6 +11,10 @@ class PurchaseItemResource extends JsonResource
         return [
             'id' => (string) $this->id,
             'userId' => $this->user_id ? (string) $this->user_id : null,
+            'userName' => $this->when(
+                $this->relationLoaded('user'),
+                fn () => $this->user?->name ?? ''
+            ),
             'supplierId' => $this->supplier_id ? (string) $this->supplier_id : null,
             'supplierName' => $this->supplier->name ?? '',
             'productId' => $this->product_id ? (string) $this->product_id : null,
