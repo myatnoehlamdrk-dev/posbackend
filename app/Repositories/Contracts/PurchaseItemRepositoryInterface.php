@@ -1,0 +1,14 @@
+<?php
+
+namespace App\Repositories\Contracts;
+
+use App\Models\PurchaseItem;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+
+interface PurchaseItemRepositoryInterface
+{
+    public function list(int $shopId, ?string $status = null): LengthAwarePaginator;
+    public function create(array $data, ?int $userId): PurchaseItem;
+    public function update(array $data, PurchaseItem $purchaseItem): PurchaseItem;
+    public function delete(PurchaseItem $purchaseItem): bool;
+}

@@ -16,7 +16,7 @@ class PurchaseItemResource extends JsonResource
                 fn () => $this->user?->name ?? ''
             ),
             'supplierId' => $this->supplier_id ? (string) $this->supplier_id : null,
-            'supplierName' => $this->supplier->name ?? '',
+            'supplierName' => $this->supplier?->name ?? '',
             'productId' => $this->product_id ? (string) $this->product_id : null,
             'productName' => $this->product_name ?? '',
             'quantity' => $this->quantity ?? 0,

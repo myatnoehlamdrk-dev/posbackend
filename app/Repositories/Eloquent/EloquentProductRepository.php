@@ -20,8 +20,11 @@ class EloquentProductRepository implements ProductRepositoryInterface
 
         $query = $this->model->query()
             ->where('active', true)
-            ->whereHas('package.category.inventory', function ($q) use ($user) {
-                $q->where('shop_id', $user->shop_id);
+            ->where(function ($q) use ($user) {
+                $q->whereHas('package.category.inventory', function ($iq) use ($user) {
+                    $iq->where('shop_id', $user->shop_id);
+                })
+                ->orWhereNull('package_id');
             })
             ->with('package.category.inventory', 'supplier');
 
@@ -40,7 +43,8 @@ class EloquentProductRepository implements ProductRepositoryInterface
 
         $query->where(function ($q) use ($user) {
             $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
-              ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id));
+              ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
+              ->orWhereNull('package_id');
         });
 
         return $query->latest()->paginate(20);

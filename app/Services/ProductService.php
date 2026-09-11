@@ -31,7 +31,7 @@ class ProductService
     public function create(array $data): JsonResponse
     {
         $variants = $data['variants'] ?? null;
-        $stock = $data['stock'];
+        $stock = $data['stock'] ?? null;
         if ($variants !== null && $stock === null) {
             $stock = collect($variants)->sum('quantity');
         }
@@ -82,7 +82,7 @@ class ProductService
     public function update(array $data, \App\Models\Product $product): JsonResponse
     {
         $variants = $data['variants'] ?? null;
-        $stock = $data['stock'];
+        $stock = $data['stock'] ?? null;
         if ($variants !== null && $stock === null) {
             $stock = collect($variants)->sum('quantity');
         }
@@ -112,7 +112,7 @@ class ProductService
             'supplier_contact' => $data['supplierContact'] ?? $product->supplier_contact,
             'supplier_since' => $data['supplierSince'] ?? $product->supplier_since,
             'supplier_address' => $data['supplierAddress'] ?? $product->supplier_address,
-            'package_id' => $data['packageId'] ?? $product->package_id,
+            'package_id' => array_key_exists('packageId', $data) ? $data['packageId'] : $product->package_id,
         ]);
 
         return response()->json(new ProductResource($updated));

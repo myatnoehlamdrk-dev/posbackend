@@ -2,29 +2,20 @@
 
 namespace App\Services;
 
-use App\Models\Order;
-use App\Models\Sale;
+use App\Repositories\Contracts\ExportRepositoryInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Response;
 
 class ExportService
 {
+    public function __construct(
+        protected ExportRepositoryInterface $exportRepository,
+    ) {}
+
     public function exportSales(Request $request, ?string $startDate = null, ?string $endDate = null): JsonResponse
     {
         $shopId = $request->user()->shop_id;
-        $query = Sale::with('saleItems')
-            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
-            ->latest();
-
-        if ($startDate) {
-            $query->where('created_at', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->where('created_at', '<=', $endDate . ' 23:59:59');
-        }
-
-        $sales = $query->get();
+        $sales = $this->exportRepository->getSalesForExport($shopId, $startDate, $endDate);
 
         $csv = $this->buildCsv(
             ['ID', 'Voucher No', 'Customer', 'Items', 'Total', 'Discount', 'Payment', 'Date'],
@@ -46,16 +37,7 @@ class ExportService
     public function exportOrders(Request $request, ?string $startDate = null, ?string $endDate = null): JsonResponse
     {
         $shopId = $request->user()->shop_id;
-        $query = Order::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))->latest();
-
-        if ($startDate) {
-            $query->where('created_at', '>=', $startDate);
-        }
-        if ($endDate) {
-            $query->where('created_at', '<=', $endDate . ' 23:59:59');
-        }
-
-        $orders = $query->get();
+        $orders = $this->exportRepository->getOrdersForExport($shopId, $startDate, $endDate);
 
         $csv = $this->buildCsv(
             ['ID', 'Order ID', 'Customer', 'Status', 'Total', 'Discount', 'Date'],

@@ -25,4 +25,10 @@ interface StockCalculatorInterface
      * Restore stock to the product (may affect related records).
      */
     public function restore(Product $product, int $quantity, ?string $size = null, ?string $color = null): void;
+
+    /**
+     * Check if a specific variant (by size/color) has enough stock.
+     * For non-variant products, falls back to total stock check.
+     */
+    public function isVariantAvailable(Product $product, int $quantity, ?string $size = null, ?string $color = null): bool;
 }

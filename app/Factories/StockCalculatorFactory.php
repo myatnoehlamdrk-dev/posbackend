@@ -21,7 +21,7 @@ class StockCalculatorFactory
         $type = (string) ($product->getAttributes()['product_type'] ?? 'simple');
         $calculatorClass = self::$calculators[$type] ?? SimpleStockCalculator::class;
 
-        return new $calculatorClass();
+        return app($calculatorClass);
     }
 
     public static function register(string $type, string $calculatorClass): void

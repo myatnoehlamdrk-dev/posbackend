@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\InsufficientStockException;
 use App\Http\Resources\SaleResource;
+use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Repositories\Contracts\SaleRepositoryInterface;
 use App\Repositories\Contracts\StockRepositoryInterface;

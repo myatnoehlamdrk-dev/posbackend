@@ -33,7 +33,7 @@ class UpdateProductRequest extends FormRequest
             'supplierContact' => ['nullable', 'string', 'max:255'],
             'supplierSince' => ['nullable', 'string', 'max:255'],
             'supplierAddress' => ['nullable', 'string', 'max:255'],
-            'packageId' => ['nullable', 'integer', 'exists:packages,id'],
+            'packageId' => ['nullable', 'integer'],
         ];
     }
 }

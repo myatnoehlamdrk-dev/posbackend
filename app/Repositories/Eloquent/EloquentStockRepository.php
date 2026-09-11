@@ -26,7 +26,7 @@ class EloquentStockRepository implements StockRepositoryInterface
         $calculator = $product->stockCalculator;
         $available = $product->getAvailableStock();
 
-        if ($calculator instanceof \App\Calculators\VariantStockCalculator && ($size !== null || $color !== null)) {
+        if ($size !== null || $color !== null) {
             if (!$calculator->isVariantAvailable($product, $quantity, $size, $color)) {
                 $variantQty = 0;
                 foreach ($product->variants ?? [] as $v) {
@@ -44,7 +44,7 @@ class EloquentStockRepository implements StockRepositoryInterface
                 );
             }
         } else {
-            if (!$product->isStockAvailable($quantity)) {
+            if (!$calculator->isAvailable($product, $quantity)) {
                 throw new \App\Exceptions\InsufficientStockException(
                     $product->name,
                     $quantity,
@@ -53,7 +53,7 @@ class EloquentStockRepository implements StockRepositoryInterface
             }
         }
 
-        $product->deductStock($quantity, $size, $color);
+        $calculator->deduct($product, $quantity, $size, $color);
     }
 
     public function restore(int $productId, int $quantity, ?string $size = null, ?string $color = null): void

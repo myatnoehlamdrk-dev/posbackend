@@ -4,35 +4,32 @@ namespace App\Services;
 
 use App\Http\Resources\InventoryResource;
 use App\Models\Inventory;
+use App\Repositories\Contracts\InventoryRepositoryInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class InventoryService
 {
+    public function __construct(
+        protected InventoryRepositoryInterface $inventoryRepository,
+    ) {}
+
     public function findOrCreateForShop(int $shopId, string $type): Inventory
     {
-        return Inventory::firstOrCreate(
-            ['shop_id' => $shopId, 'type' => $type],
-            ['amount_category' => 25]
-        );
+        return $this->inventoryRepository->findOrCreateForShop($shopId, $type);
     }
 
     public function listForShop(Request $request): JsonResponse
     {
         $user = $request->user();
+        $inventory = $this->inventoryRepository->listForShop($user->shop_id, $request->input('type'));
 
-        $query = Inventory::where('shop_id', $user->shop_id);
-
-        if ($request->filled('type')) {
-            $query->where('type', $request->input('type'));
-        }
-
-        return response()->json(InventoryResource::collection($query->latest()->paginate(20)));
+        return response()->json(InventoryResource::collection($inventory));
     }
 
     public function create(int $shopId, string $type): JsonResponse
     {
-        $inventory = $this->findOrCreateForShop($shopId, $type);
+        $inventory = $this->inventoryRepository->create($shopId, $type);
 
         return response()->json(new InventoryResource($inventory), 201);
     }
@@ -44,18 +41,14 @@ class InventoryService
 
     public function update(array $data, Inventory $inventory): JsonResponse
     {
-        $inventory->update([
-            'shop_id' => $data['shopId'] ?? $inventory->shop_id,
-            'type' => $data['type'] ?? $inventory->type,
-            'amount_category' => $data['amountCategory'] ?? $inventory->amount_category,
-        ]);
+        $updated = $this->inventoryRepository->update($data, $inventory);
 
-        return response()->json(new InventoryResource($inventory));
+        return response()->json(new InventoryResource($updated));
     }
 
     public function delete(Inventory $inventory): JsonResponse
     {
-        $inventory->delete();
+        $this->inventoryRepository->delete($inventory);
 
         return response()->json(['message' => 'Inventory deleted successfully.']);
     }

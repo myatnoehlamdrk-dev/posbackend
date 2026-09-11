@@ -37,4 +37,9 @@ class SimpleStockCalculator implements StockCalculatorInterface
     {
         $product->increment('stock', $quantity);
     }
+
+    public function isVariantAvailable(Product $product, int $quantity, ?string $size = null, ?string $color = null): bool
+    {
+        return $this->isAvailable($product, $quantity);
+    }
 }

@@ -76,4 +76,9 @@ class BundleStockCalculator implements StockCalculatorInterface
             $componentProduct->increment('stock', $restoreQty);
         }
     }
+
+    public function isVariantAvailable(Product $product, int $quantity, ?string $size = null, ?string $color = null): bool
+    {
+        return $this->isAvailable($product, $quantity);
+    }
 }
