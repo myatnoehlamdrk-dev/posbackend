@@ -26,6 +26,7 @@ class UserResource extends JsonResource
             'dateOfBirth' => $this->date_of_birth?->format('Y-m-d'),
             'gender' => $this->gender,
             'activeStatus' => $this->active_status,
+            'isVerified' => $this->is_verified,
             'shop' => new \App\Http\Resources\ShopResource($this->whenLoaded('shop')),
         ];
     }

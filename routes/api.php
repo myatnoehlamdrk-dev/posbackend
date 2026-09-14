@@ -8,6 +8,13 @@ Route::prefix('auth')->group(function () {
     Route::post('/register', [App\Http\Controllers\AuthController::class, 'register']);
     Route::post('/login', [App\Http\Controllers\AuthController::class, 'login']);
 
+    Route::post('/register/send-otp', [App\Http\Controllers\PasswordResetController::class, 'registerSendOtp']);
+    Route::post('/register/verify-otp', [App\Http\Controllers\PasswordResetController::class, 'registerVerifyOtp']);
+
+    Route::post('/forgot-password/send-otp', [App\Http\Controllers\PasswordResetController::class, 'sendOtp']);
+    Route::post('/forgot-password/verify-otp', [App\Http\Controllers\PasswordResetController::class, 'verifyOtp']);
+    Route::post('/forgot-password/reset', [App\Http\Controllers\PasswordResetController::class, 'resetPassword']);
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::post('/logout', [App\Http\Controllers\AuthController::class, 'logout']);
         Route::get('/me', [App\Http\Controllers\AuthController::class, 'me']);

@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Http\Resources\UserResource;
+use App\Mail\OtpMail;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -41,14 +44,26 @@ class AuthController extends Controller
             'date_of_birth' => $data['dob'] ?? null,
             'gender' => $data['gender'] ?? null,
             'shop_id' => $data['shopId'] ?? null,
+            'is_verified' => false,
         ]);
 
-        $token = $user->createToken('api')->plainTextToken;
+        // Send verification OTP via email
+        $otp = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
 
-        return response()->json(array_merge(UserResource::make($user)->resolve(request()), [
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-        ]), 201);
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $data['email']],
+            [
+                'token' => $otp,
+                'created_at' => now(),
+            ]
+        );
+
+        Mail::to($data['email'])->send(new OtpMail($otp));
+
+        return response()->json([
+            'message' => 'Registration successful. Please verify your email.',
+            'email' => $data['email'],
+        ], 201);
     }
 
     public function login(Request $request): JsonResponse
@@ -63,6 +78,12 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($data['password'], $user->password)) {
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
+            ]);
+        }
+
+        if (! $user->is_verified) {
+            throw ValidationException::withMessages([
+                'email' => ['Please verify your email first. Check your inbox for the verification code.'],
             ]);
         }
 

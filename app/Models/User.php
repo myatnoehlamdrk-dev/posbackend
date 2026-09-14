@@ -31,6 +31,7 @@ class User extends Authenticatable
         'date_of_birth',
         'gender',
         'active_status',
+        'is_verified',
     ];
 
     protected $hidden = [
@@ -45,6 +46,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'date_of_birth' => 'date',
             'active_status' => 'boolean',
+            'is_verified' => 'boolean',
         ];
     }
 
