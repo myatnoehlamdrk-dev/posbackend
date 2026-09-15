@@ -14,16 +14,6 @@ class Customer extends Model
         'shop_id',
         'name',
         'phone',
-        'email',
-        'address',
-        'tax_id',
-        'total_purchases',
-        'total_spent',
-    ];
-
-    protected $casts = [
-        'total_purchases' => 'integer',
-        'total_spent' => 'integer',
     ];
 
     public function shop(): BelongsTo

@@ -43,6 +43,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
     Route::put('settings', [App\Http\Controllers\SettingController::class, 'update']);
 
+    Route::get('customers/analytics', [App\Http\Controllers\CustomerController::class, 'analytics']);
+    Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search']);
     Route::apiResource('customers', App\Http\Controllers\CustomerController::class);
 
     Route::prefix('stock-alerts')->group(function () {

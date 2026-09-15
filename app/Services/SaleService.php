@@ -27,11 +27,11 @@ class SaleService
         return response()->json(SaleResource::collection($this->saleRepository->list($request)));
     }
 
-    public function create(array $data): JsonResponse
+    public function create(array $data, ?int $userId = null): JsonResponse
     {
         try {
-            $sale = DB::transaction(function () use ($data) {
-                $userId = $this->userResolutionService->resolveId(
+            $sale = DB::transaction(function () use ($data, $userId) {
+                $resolvedUserId = $this->userResolutionService->resolveId(
                     $data['userId'] ?? null,
                     $data['userName'] ?? null
                 );
@@ -39,7 +39,7 @@ class SaleService
                 $aggregated = $this->orderItemService->aggregate($data['items']);
 
                 $sale = $this->saleRepository->create([
-                    'user_id' => $userId,
+                    'user_id' => $resolvedUserId,
                     'user_name' => $data['userName'],
                     'voucher_no' => $data['voucherNo'],
                     'order_id' => $data['orderId'],
@@ -50,6 +50,7 @@ class SaleService
                     'price_per_unit' => $aggregated['price_per_unit'],
                     'customer_name' => $data['customerName'] ?? null,
                     'customer_phone' => $data['customerPhone'] ?? null,
+                    'customer_location' => $data['customerLocation'] ?? null,
                     'pay_method' => $data['payMethod'] ?? null,
                     'items' => $data['items'],
                     'grand_total' => $data['grandTotal'],
@@ -71,6 +72,7 @@ class SaleService
                         'size' => $item['size'] ?? null,
                         'color' => $item['color'] ?? null,
                         'notes' => $item['notes'] ?? null,
+                        'created_by' => $userId,
                     ]);
                 }
 
@@ -104,11 +106,11 @@ class SaleService
         return response()->json(new SaleResource($sale->load('saleItems')));
     }
 
-    public function update(array $data, Sale $sale): JsonResponse
+    public function update(array $data, Sale $sale, ?int $userId = null): JsonResponse
     {
-        $userId = $data['userId'] ?? $sale->user_id;
+        $resolvedUserId = $data['userId'] ?? $sale->user_id;
         if (array_key_exists('userName', $data)) {
-            $userId = $this->userResolutionService->resolveId($userId, $data['userName']) ?? $userId;
+            $resolvedUserId = $this->userResolutionService->resolveId($resolvedUserId, $data['userName']) ?? $resolvedUserId;
         }
 
         $productId = $data['productId'] ?? $sale->product_id;
@@ -117,7 +119,7 @@ class SaleService
         }
 
         $updated = $this->saleRepository->update($sale, [
-            'user_id' => $userId,
+            'user_id' => $resolvedUserId,
             'user_name' => $data['userName'] ?? $sale->user_name,
             'voucher_no' => $data['voucherNo'] ?? $sale->voucher_no,
             'product_id' => $productId,
@@ -129,6 +131,7 @@ class SaleService
             'customer_name' => $data['customerName'] ?? $sale->customer_name,
             'customer_phone' => $data['customerPhone'] ?? $sale->customer_phone,
             'pay_method' => $data['payMethod'] ?? $sale->pay_method,
+            'updated_by' => $userId,
         ]);
 
         return response()->json(new SaleResource($updated->load('saleItems')));

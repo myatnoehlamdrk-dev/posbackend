@@ -19,7 +19,10 @@ class SaleItemResource extends JsonResource
             'size' => $this->size ?? '',
             'color' => $this->color ?? '',
             'notes' => $this->notes ?? '',
+            'createdBy' => $this->whenLoaded('createdByUser', fn () => $this->createdByUser?->name),
+            'updatedBy' => $this->whenLoaded('updatedByUser', fn () => $this->updatedByUser?->name),
             'createdAt' => $this->created_at?->toISOString(),
+            'updatedAt' => $this->updated_at?->toISOString(),
         ];
     }
 }

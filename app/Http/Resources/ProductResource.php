@@ -47,6 +47,10 @@ class ProductResource extends JsonResource
             'supplierAddress' => $this->supplier_address ?? '',
             'packageId' => $this->package_id ? (string) $this->package_id : null,
             'active' => (bool) $this->active,
+            'createdBy' => $this->whenLoaded('createdByUser', fn () => $this->createdByUser?->name),
+            'updatedBy' => $this->whenLoaded('updatedByUser', fn () => $this->updatedByUser?->name),
+            'createdAt' => $this->created_at?->toISOString(),
+            'updatedAt' => $this->updated_at?->toISOString(),
         ];
     }
 }

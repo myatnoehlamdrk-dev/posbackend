@@ -32,7 +32,7 @@ class CategoryController extends Controller
 
     public function update(UpdateCategoryRequest $request, Category $category): JsonResponse
     {
-        return $this->categoryService->update($request->validated(), $category);
+        return $this->categoryService->update($request->validated(), $category, $request->user()->id);
     }
 
     public function destroy(Category $category): JsonResponse

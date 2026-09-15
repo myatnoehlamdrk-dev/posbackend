@@ -25,7 +25,10 @@ class PurchaseItemResource extends JsonResource
             'date' => $this->date?->toDateString() ?? '',
             'status' => $this->status ?? 'pending',
             'notes' => $this->notes ?? '',
+            'createdBy' => $this->whenLoaded('createdByUser', fn () => $this->createdByUser?->name),
+            'updatedBy' => $this->whenLoaded('updatedByUser', fn () => $this->updatedByUser?->name),
             'createdAt' => $this->created_at?->toISOString(),
+            'updatedAt' => $this->updated_at?->toISOString(),
         ];
     }
 }

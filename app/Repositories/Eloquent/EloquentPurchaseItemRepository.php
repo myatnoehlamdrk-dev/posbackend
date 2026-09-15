@@ -10,7 +10,7 @@ class EloquentPurchaseItemRepository implements PurchaseItemRepositoryInterface
 {
     public function list(int $shopId, ?string $status = null): LengthAwarePaginator
     {
-        $query = PurchaseItem::with('supplier', 'user')
+        $query = PurchaseItem::with('supplier', 'user', 'createdByUser', 'updatedByUser')
             ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId));
 
         if ($status === 'pending') {
@@ -20,7 +20,7 @@ class EloquentPurchaseItemRepository implements PurchaseItemRepositoryInterface
         return $query->latest()->paginate(20);
     }
 
-    public function create(array $data, ?int $userId): PurchaseItem
+    public function create(array $data, ?int $userId, ?int $createdBy = null): PurchaseItem
     {
         return PurchaseItem::create([
             'user_id' => $userId,
@@ -33,6 +33,7 @@ class EloquentPurchaseItemRepository implements PurchaseItemRepositoryInterface
             'date' => $data['date'],
             'status' => 'pending',
             'notes' => $data['notes'] ?? null,
+            'created_by' => $createdBy,
         ])->fresh(['supplier']);
     }
 

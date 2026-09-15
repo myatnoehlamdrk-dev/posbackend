@@ -41,7 +41,7 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
             });
         }
 
-        return $query->withCount('packages')->with('inventory', 'packages.products')->latest()->paginate(20);
+        return $query->withCount('packages')->with('inventory', 'packages.products', 'createdByUser', 'updatedByUser')->latest()->paginate(20);
     }
 
     public function findById(int $id): ?Category

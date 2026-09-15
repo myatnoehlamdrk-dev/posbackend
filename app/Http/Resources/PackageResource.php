@@ -28,6 +28,10 @@ class PackageResource extends JsonResource
             'location' => $this->location ?? '',
             'stockStatus' => $this->stock_status ?? '',
             'productImages' => $productImages,
+            'createdBy' => $this->whenLoaded('createdByUser', fn () => $this->createdByUser?->name),
+            'updatedBy' => $this->whenLoaded('updatedByUser', fn () => $this->updatedByUser?->name),
+            'createdAt' => $this->created_at?->toISOString(),
+            'updatedAt' => $this->updated_at?->toISOString(),
         ];
     }
 }

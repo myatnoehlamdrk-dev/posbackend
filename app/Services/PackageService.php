@@ -19,7 +19,7 @@ class PackageService
         return response()->json(PackageResource::collection($this->packageRepository->listForShop($request)));
     }
 
-    public function create(array $data, int $shopId): JsonResponse
+    public function create(array $data, int $shopId, ?int $userId = null): JsonResponse
     {
         $category = Category::whereHas('inventory', function ($q) use ($shopId) {
             $q->where('shop_id', $shopId);
@@ -33,6 +33,7 @@ class PackageService
             'description' => $data['description'] ?? null,
             'location' => $data['location'] ?? null,
             'stock_status' => $data['stockStatus'] ?? null,
+            'created_by' => $userId,
         ]);
 
         return response()->json(new PackageResource($package), 201);
@@ -45,7 +46,7 @@ class PackageService
         return response()->json(new PackageResource($package));
     }
 
-    public function update(array $data, \App\Models\Package $package, int $shopId): JsonResponse
+    public function update(array $data, \App\Models\Package $package, int $shopId, ?int $userId = null): JsonResponse
     {
         if (isset($data['categoryId'])) {
             Category::whereHas('inventory', function ($q) use ($shopId) {
@@ -60,6 +61,7 @@ class PackageService
             'description' => $data['description'] ?? $package->description,
             'location' => $data['location'] ?? $package->location,
             'stock_status' => $data['stockStatus'] ?? $package->stock_status,
+            'updated_by' => $userId,
         ]);
 
         return response()->json(new PackageResource($updated));

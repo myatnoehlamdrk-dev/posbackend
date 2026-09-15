@@ -23,7 +23,7 @@ class SaleController extends Controller
 
     public function store(StoreSaleRequest $request): JsonResponse
     {
-        return $this->saleService->create($request->validated());
+        return $this->saleService->create($request->validated(), $request->user()->id);
     }
 
     public function show(Sale $sale): JsonResponse
@@ -33,7 +33,7 @@ class SaleController extends Controller
 
     public function update(UpdateSaleRequest $request, Sale $sale): JsonResponse
     {
-        return $this->saleService->update($request->validated(), $sale);
+        return $this->saleService->update($request->validated(), $sale, $request->user()->id);
     }
 
     public function destroy(Sale $sale): JsonResponse

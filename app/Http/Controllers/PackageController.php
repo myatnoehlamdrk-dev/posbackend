@@ -22,7 +22,7 @@ class PackageController extends Controller
 
     public function store(StorePackageRequest $request): JsonResponse
     {
-        return $this->packageService->create($request->validated(), $request->user()->shop_id);
+        return $this->packageService->create($request->validated(), $request->user()->shop_id, $request->user()->id);
     }
 
     public function show(Package $package): JsonResponse
@@ -32,7 +32,7 @@ class PackageController extends Controller
 
     public function update(UpdatePackageRequest $request, Package $package): JsonResponse
     {
-        return $this->packageService->update($request->validated(), $package, $request->user()->shop_id);
+        return $this->packageService->update($request->validated(), $package, $request->user()->shop_id, $request->user()->id);
     }
 
     public function destroy(Package $package): JsonResponse

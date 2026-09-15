@@ -33,6 +33,8 @@ class SaleResource extends JsonResource
             'grandTotal' => $this->grand_total ?? 0,
             'discount' => $this->discount ?? 0,
             'notes' => $this->notes ?? '',
+            'createdBy' => $this->whenLoaded('createdByUser', fn () => $this->createdByUser?->name),
+            'updatedBy' => $this->whenLoaded('updatedByUser', fn () => $this->updatedByUser?->name),
             'createdAt' => $this->created_at?->toISOString(),
         ];
     }

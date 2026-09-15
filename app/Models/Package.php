@@ -19,6 +19,8 @@ class Package extends Model
         'description',
         'location',
         'stock_status',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -34,5 +36,15 @@ class Package extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class);
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

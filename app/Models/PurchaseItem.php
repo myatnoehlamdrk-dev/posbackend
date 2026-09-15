@@ -21,6 +21,8 @@ class PurchaseItem extends Model
         'date',
         'status',
         'notes',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -43,5 +45,15 @@ class PurchaseItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

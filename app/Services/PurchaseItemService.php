@@ -24,7 +24,7 @@ class PurchaseItemService
 
     public function create(array $data, ?int $userId): JsonResponse
     {
-        $purchaseItem = $this->purchaseItemRepository->create($data, $userId);
+        $purchaseItem = $this->purchaseItemRepository->create($data, $userId, $userId);
 
         return response()->json(new PurchaseItemResource($purchaseItem), 201);
     }
@@ -34,8 +34,9 @@ class PurchaseItemService
         return response()->json(new PurchaseItemResource($purchaseItem->load(['supplier', 'product'])));
     }
 
-    public function update(array $data, PurchaseItem $purchaseItem): JsonResponse
+    public function update(array $data, PurchaseItem $purchaseItem, ?int $userId = null): JsonResponse
     {
+        $data['updated_by'] = $userId;
         $updated = $this->purchaseItemRepository->update($data, $purchaseItem);
 
         return response()->json(new PurchaseItemResource($updated));

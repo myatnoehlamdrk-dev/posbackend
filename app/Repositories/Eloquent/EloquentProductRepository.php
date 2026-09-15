@@ -26,7 +26,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
                 })
                 ->orWhereNull('package_id');
             })
-            ->with('package.category.inventory', 'supplier');
+            ->with('package.category.inventory', 'supplier', 'createdByUser', 'updatedByUser');
 
         if ($request->filled('packageId')) {
             $query->where('package_id', $request->integer('packageId'));

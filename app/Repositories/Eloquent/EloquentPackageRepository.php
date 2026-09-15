@@ -35,7 +35,7 @@ class EloquentPackageRepository implements PackageRepositoryInterface
               ->orWhereHas('category', fn ($cq) => $cq->where('user_id', $user->id));
         });
 
-        return $query->withCount('products')->with('products')->latest()->paginate(20);
+        return $query->withCount('products')->with('products', 'createdByUser', 'updatedByUser')->latest()->paginate(20);
     }
 
     public function findById(int $id): ?Package

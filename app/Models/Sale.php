@@ -23,6 +23,7 @@ class Sale extends Model
         'price_per_unit',
         'customer_name',
         'customer_phone',
+        'customer_location',
         'pay_method',
         'items',
         'grand_total',
@@ -50,5 +51,15 @@ class Sale extends Model
     public function saleItems(): HasMany
     {
         return $this->hasMany(SaleItem::class);
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

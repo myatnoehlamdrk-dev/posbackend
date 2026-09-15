@@ -30,6 +30,8 @@ class Product extends Model
         'supplier_address',
         'package_id',
         'active',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -52,6 +54,16 @@ class Product extends Model
     public function getStockCalculatorAttribute()
     {
         return StockCalculatorFactory::make($this);
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 
     public function getAvailableStock(): int

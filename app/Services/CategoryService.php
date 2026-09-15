@@ -39,6 +39,7 @@ class CategoryService
             'amount_of_package' => 0,
             'package_limit' => $data['packageLimit'] ?? 0,
             'description' => $data['description'] ?? null,
+            'created_by' => $userId,
         ]);
 
         $inventory->increment('amount_category');
@@ -54,13 +55,14 @@ class CategoryService
         return response()->json(new CategoryResource($category));
     }
 
-    public function update(array $data, \App\Models\Category $category): JsonResponse
+    public function update(array $data, \App\Models\Category $category, ?int $userId = null): JsonResponse
     {
         $updated = $this->categoryRepository->update($category, [
             'inventory_id' => $data['inventoryId'] ?? $category->inventory_id,
             'name' => $data['name'] ?? $category->name,
             'package_limit' => $data['packageLimit'] ?? $category->package_limit,
             'description' => $data['description'] ?? $category->description,
+            'updated_by' => $userId,
         ]);
 
         return response()->json(new CategoryResource($updated));

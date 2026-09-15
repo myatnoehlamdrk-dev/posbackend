@@ -32,7 +32,7 @@ class PurchaseItemController extends Controller
 
     public function update(UpdatePurchaseItemRequest $request, PurchaseItem $purchaseItem): JsonResponse
     {
-        return $this->purchaseItemService->update($request->validated(), $purchaseItem);
+        return $this->purchaseItemService->update($request->validated(), $purchaseItem, $request->user()?->id);
     }
 
     public function destroy(PurchaseItem $purchaseItem): JsonResponse

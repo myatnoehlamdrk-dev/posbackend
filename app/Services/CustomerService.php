@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Http\Resources\CustomerResource;
 use App\Repositories\Contracts\CustomerRepositoryInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,15 @@ class CustomerService
 
     public function listForShop(Request $request): JsonResponse
     {
-        return response()->json($this->customerRepository->listForShop($request));
+        $paginator = $this->customerRepository->listForShop($request);
+
+        return response()->json([
+            'data' => CustomerResource::collection($paginator),
+            'current_page' => $paginator->currentPage(),
+            'last_page' => $paginator->lastPage(),
+            'per_page' => $paginator->perPage(),
+            'total' => $paginator->total(),
+        ]);
     }
 
     public function create(array $data, int $shopId): JsonResponse
@@ -23,17 +32,14 @@ class CustomerService
             'shop_id' => $shopId,
             'name' => $data['name'],
             'phone' => $data['phone'] ?? null,
-            'email' => $data['email'] ?? null,
-            'address' => $data['address'] ?? null,
-            'tax_id' => $data['taxId'] ?? null,
         ]);
 
-        return response()->json($customer, 201);
+        return response()->json(new CustomerResource($customer), 201);
     }
 
     public function show(\App\Models\Customer $customer): JsonResponse
     {
-        return response()->json($customer);
+        return response()->json(new CustomerResource($customer));
     }
 
     public function update(array $data, \App\Models\Customer $customer): JsonResponse
@@ -41,12 +47,9 @@ class CustomerService
         $updated = $this->customerRepository->update($customer, [
             'name' => $data['name'] ?? $customer->name,
             'phone' => $data['phone'] ?? $customer->phone,
-            'email' => $data['email'] ?? $customer->email,
-            'address' => $data['address'] ?? $customer->address,
-            'tax_id' => $data['taxId'] ?? $customer->tax_id,
         ]);
 
-        return response()->json($updated);
+        return response()->json(new CustomerResource($updated));
     }
 
     public function delete(\App\Models\Customer $customer): JsonResponse
@@ -56,13 +59,16 @@ class CustomerService
         return response()->json(['message' => 'Customer deleted successfully.']);
     }
 
-    public function incrementStats(int $customerId, int $orderTotal): void
+    public function analytics(int $shopId): JsonResponse
     {
-        $this->customerRepository->incrementStats($customerId, $orderTotal);
+        return response()->json($this->customerRepository->analytics($shopId));
     }
 
-    public function findOrCreateByName(string $name, int $shopId, ?string $phone = null): \App\Models\Customer
+    public function searchFromSales(Request $request): JsonResponse
     {
-        return $this->customerRepository->findOrCreateByName($name, $shopId, $phone);
+        $shopId = $request->user()->shop_id;
+        $query = $request->input('query', '');
+
+        return response()->json($this->customerRepository->searchFromSales($shopId, $query));
     }
 }

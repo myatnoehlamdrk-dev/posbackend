@@ -28,7 +28,7 @@ class ProductService
         return response()->json(ProductResource::collection($products));
     }
 
-    public function create(array $data): JsonResponse
+    public function create(array $data, ?int $userId = null): JsonResponse
     {
         $variants = $data['variants'] ?? null;
         $stock = $data['stock'] ?? null;
@@ -66,6 +66,7 @@ class ProductService
             'supplier_address' => $data['supplierAddress'] ?? null,
             'package_id' => $data['packageId'] ?? null,
             'active' => true,
+            'created_by' => $userId,
         ]);
 
         $this->linkPurchaseItem($data['purchaseItemId'] ?? null, $product->id);
@@ -79,7 +80,7 @@ class ProductService
         return response()->json(new ProductResource($product));
     }
 
-    public function update(array $data, \App\Models\Product $product): JsonResponse
+    public function update(array $data, \App\Models\Product $product, ?int $userId = null): JsonResponse
     {
         $variants = $data['variants'] ?? null;
         $stock = $data['stock'] ?? null;
@@ -113,6 +114,7 @@ class ProductService
             'supplier_since' => $data['supplierSince'] ?? $product->supplier_since,
             'supplier_address' => $data['supplierAddress'] ?? $product->supplier_address,
             'package_id' => array_key_exists('packageId', $data) ? $data['packageId'] : $product->package_id,
+            'updated_by' => $userId,
         ]);
 
         return response()->json(new ProductResource($updated));

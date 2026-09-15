@@ -18,6 +18,8 @@ class Category extends Model
         'amount_of_package',
         'package_limit',
         'description',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -33,5 +35,15 @@ class Category extends Model
     public function packages(): HasMany
     {
         return $this->hasMany(Package::class);
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

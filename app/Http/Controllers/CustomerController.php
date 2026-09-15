@@ -39,4 +39,14 @@ class CustomerController extends Controller
     {
         return $this->customerService->delete($customer);
     }
+
+    public function analytics(Request $request): JsonResponse
+    {
+        return $this->customerService->analytics($request->user()->shop_id);
+    }
+
+    public function search(Request $request): JsonResponse
+    {
+        return $this->customerService->searchFromSales($request);
+    }
 }

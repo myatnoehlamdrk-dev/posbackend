@@ -27,7 +27,7 @@ class ProductController extends Controller
 
     public function store(StoreProductRequest $request): JsonResponse
     {
-        return $this->productService->create($request->validated());
+        return $this->productService->create($request->validated(), $request->user()->id);
     }
 
     public function show(int $id): JsonResponse
@@ -49,7 +49,7 @@ class ProductController extends Controller
             return $this->notFound('Product not found');
         }
 
-        return $this->productService->update($request->validated(), $product);
+        return $this->productService->update($request->validated(), $product, $request->user()->id);
     }
 
     public function destroy(int $id): JsonResponse

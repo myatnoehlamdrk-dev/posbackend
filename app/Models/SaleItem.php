@@ -20,6 +20,8 @@ class SaleItem extends Model
         'size',
         'color',
         'notes',
+        'created_by',
+        'updated_by',
     ];
 
     protected $casts = [
@@ -36,5 +38,15 @@ class SaleItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function createdByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function updatedByUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'updated_by');
     }
 }

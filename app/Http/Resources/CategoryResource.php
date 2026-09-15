@@ -27,7 +27,10 @@ class CategoryResource extends JsonResource
             'amountOfPackage' => $this->packages_count ?? $this->amount_of_package,
             'packageLimit' => $this->package_limit ?? 0,
             'description' => $this->description ?? '',
+            'createdBy' => $this->whenLoaded('createdByUser', fn () => $this->createdByUser?->name),
+            'updatedBy' => $this->whenLoaded('updatedByUser', fn () => $this->updatedByUser?->name),
             'createdAt' => $this->created_at?->toDateTimeString(),
+            'updatedAt' => $this->updated_at?->toDateTimeString(),
             'productImages' => $productImages,
         ];
     }
