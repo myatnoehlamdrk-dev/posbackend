@@ -87,6 +87,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if (! $user->active_status) {
+            throw ValidationException::withMessages([
+                'email' => ['Your account is inactive. Please contact administrator for access.'],
+            ]);
+        }
+
         $token = $user->createToken('api')->plainTextToken;
 
         return response()->json(array_merge(UserResource::make($user)->resolve(request()), [

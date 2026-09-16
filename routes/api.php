@@ -78,4 +78,20 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 });
 
+Route::middleware(['auth:sanctum', 'admin'])->prefix('admin')->group(function () {
+    Route::get('/dashboard', [App\Http\Controllers\AdminController::class, 'dashboard']);
+    Route::get('/dashboard/sales-chart', [App\Http\Controllers\AdminController::class, 'salesChart']);
+    Route::get('/dashboard/top-products', [App\Http\Controllers\AdminController::class, 'topProducts']);
+
+    Route::get('/shops', [App\Http\Controllers\AdminController::class, 'shops']);
+    Route::put('/shops/{shop}/toggle-active', [App\Http\Controllers\AdminController::class, 'toggleShopActive']);
+    Route::delete('/shops/{shop}', [App\Http\Controllers\AdminController::class, 'destroyShop']);
+
+    Route::get('/users', [App\Http\Controllers\AdminController::class, 'users']);
+    Route::get('/users/pending', [App\Http\Controllers\AdminController::class, 'pendingUsers']);
+    Route::put('/users/{user}/approve', [App\Http\Controllers\AdminController::class, 'approveUser']);
+    Route::put('/users/{user}/toggle-active', [App\Http\Controllers\AdminController::class, 'toggleUserActive']);
+    Route::delete('/users/{user}', [App\Http\Controllers\AdminController::class, 'destroyUser']);
+});
+
 Route::post('images', [App\Http\Controllers\ImageController::class, 'store']);

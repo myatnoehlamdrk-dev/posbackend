@@ -30,6 +30,7 @@ use App\Repositories\Eloquent\EloquentSaleRepository;
 use App\Repositories\Eloquent\EloquentStockAlertRepository;
 use App\Repositories\Eloquent\EloquentStockRepository;
 use App\Repositories\Eloquent\EloquentSupplierRepository;
+use App\Services\AdminDashboardService;
 use App\Services\AuditService;
 use App\Services\CategoryService;
 use App\Services\CustomerService;
@@ -84,6 +85,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AuditService::class);
         $this->app->singleton(ExportService::class);
         $this->app->singleton(DashboardService::class);
+        $this->app->singleton(AdminDashboardService::class);
         $this->app->singleton(PurchaseItemService::class);
     }
 
