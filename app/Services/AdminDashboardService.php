@@ -58,14 +58,20 @@ class AdminDashboardService
     {
         return DB::table('sale_items')
             ->join('products', 'sale_items.product_id', '=', 'products.id')
+            ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+            ->join('users', 'sales.user_id', '=', 'users.id')
+            ->join('shops', 'users.shop_id', '=', 'shops.id')
             ->where('sale_items.created_at', '>=', Carbon::now()->subDays(30))
             ->select(
                 'products.name as product_name',
                 'products.image as product_image',
+                'shops.shop_name as shop_name',
+                DB::raw('ROUND(AVG(sale_items.unit_price)) as unit_price'),
                 DB::raw('SUM(sale_items.quantity) as total_quantity'),
-                DB::raw('SUM(sale_items.subtotal) as total_revenue')
+                DB::raw('SUM(sale_items.subtotal) as total_revenue'),
+                DB::raw('MAX(products.stock) as stock')
             )
-            ->groupBy('products.name', 'products.image')
+            ->groupBy('products.name', 'products.image', 'shops.shop_name')
             ->orderByDesc('total_quantity')
             ->limit($limit)
             ->get()
