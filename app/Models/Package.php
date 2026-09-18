@@ -12,6 +12,7 @@ class Package extends Model
     use HasFactory;
 
     protected $fillable = [
+        'active',
         'category_id',
         'name',
         'amount_of_product',

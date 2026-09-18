@@ -134,6 +134,6 @@ class OrderService
             $this->orderRepository->delete($order);
         });
 
-        return response()->json(['message' => 'Order deleted successfully.']);
+        return response()->json(null, 204);
     }
 }

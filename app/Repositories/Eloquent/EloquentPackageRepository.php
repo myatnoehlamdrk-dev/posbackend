@@ -17,7 +17,7 @@ class EloquentPackageRepository implements PackageRepositoryInterface
     {
         $user = $request->user();
 
-        $query = $this->model->query();
+        $query = $this->model->query()->where('active', true);
 
         if ($request->filled('categoryId')) {
             $category = \App\Models\Category::whereHas('inventory', function ($q) use ($user) {
@@ -56,7 +56,7 @@ class EloquentPackageRepository implements PackageRepositoryInterface
 
     public function delete(Package $package): bool
     {
-        return $package->delete();
+        return $package->update(['active' => false]);
     }
 
     public function countProducts(Package $package): int

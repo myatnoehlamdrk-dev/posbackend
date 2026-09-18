@@ -50,6 +50,6 @@ class InventoryService
     {
         $this->inventoryRepository->delete($inventory);
 
-        return response()->json(['message' => 'Inventory deleted successfully.']);
+        return response()->json(null, 204);
     }
 }

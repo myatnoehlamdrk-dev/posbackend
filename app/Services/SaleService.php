@@ -41,6 +41,7 @@ class SaleService
                 $sale = $this->saleRepository->create([
                     'user_id' => $resolvedUserId,
                     'user_name' => $data['userName'],
+                    'created_by' => $userId,
                     'voucher_no' => $data['voucherNo'],
                     'order_id' => $data['orderId'],
                     'product_id' => $aggregated['product_ids'] ?: null,
@@ -103,7 +104,7 @@ class SaleService
 
     public function show(Sale $sale): JsonResponse
     {
-        return response()->json(new SaleResource($sale->load('saleItems')));
+        return response()->json(new SaleResource($sale->load('saleItems', 'createdByUser')));
     }
 
     public function update(array $data, Sale $sale, ?int $userId = null): JsonResponse
@@ -159,7 +160,7 @@ class SaleService
             $this->saleRepository->delete($sale);
         });
 
-        return response()->json(['message' => 'Sale deleted successfully.']);
+        return response()->json(null, 204);
     }
 
     public function deleteItem(Sale $sale, \App\Models\SaleItem $saleItem): JsonResponse

@@ -40,40 +40,116 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             ->count();
     }
 
-    public function getTotalProducts(int $shopId): int
+    public function getTotalProducts(int $shopId, int $userId): int
     {
         return DB::table('products')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->where('products.active', true)
-            ->where('inventories.shop_id', $shopId)
-            ->count();
+            ->where(function ($q) use ($shopId, $userId) {
+                // Product is in this shop's inventory chain
+                $q->whereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('packages')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                        ->whereColumn('packages.id', 'products.package_id')
+                        ->where('inventories.shop_id', $shopId);
+                })
+                // OR product shares package_id with any product in this shop
+                ->orWhereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('products as p2')
+                        ->join('packages', 'packages.id', '=', 'p2.package_id')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                        ->where('inventories.shop_id', $shopId)
+                        ->whereColumn('p2.package_id', 'products.package_id')
+                        ->whereNotNull('products.package_id');
+                })
+                // OR product belongs to a category owned by this user (any shop)
+                ->orWhereExists(function ($sub) use ($userId) {
+                    $sub->select(DB::raw(1))
+                        ->from('packages')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->whereColumn('packages.id', 'products.package_id')
+                        ->where('categories.user_id', $userId);
+                })
+                // OR orphan product (no package)
+                ->orWhereNull('products.package_id');
+            })
+            ->count(DB::raw('DISTINCT products.id'));
     }
 
-    public function getInStockCount(int $shopId): int
+    public function getInStockCount(int $shopId, int $userId): int
     {
         return DB::table('products')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->where('products.active', true)
-            ->where('inventories.shop_id', $shopId)
             ->where('products.stock', '>', 0)
-            ->count();
+            ->where(function ($q) use ($shopId, $userId) {
+                $q->whereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('packages')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                        ->whereColumn('packages.id', 'products.package_id')
+                        ->where('inventories.shop_id', $shopId);
+                })
+                ->orWhereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('products as p2')
+                        ->join('packages', 'packages.id', '=', 'p2.package_id')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                        ->where('inventories.shop_id', $shopId)
+                        ->whereColumn('p2.package_id', 'products.package_id')
+                        ->whereNotNull('products.package_id');
+                })
+                ->orWhereExists(function ($sub) use ($userId) {
+                    $sub->select(DB::raw(1))
+                        ->from('packages')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->whereColumn('packages.id', 'products.package_id')
+                        ->where('categories.user_id', $userId);
+                })
+                ->orWhereNull('products.package_id');
+            })
+            ->count(DB::raw('DISTINCT products.id'));
     }
 
-    public function getLowStockCount(int $shopId): int
+    public function getLowStockCount(int $shopId, int $userId): int
     {
         return DB::table('products')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->where('products.active', true)
-            ->where('inventories.shop_id', $shopId)
             ->where('products.stock', '>', 0)
             ->where('products.stock', '<=', 5)
-            ->count();
+            ->where(function ($q) use ($shopId, $userId) {
+                $q->whereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('packages')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                        ->whereColumn('packages.id', 'products.package_id')
+                        ->where('inventories.shop_id', $shopId);
+                })
+                ->orWhereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('products as p2')
+                        ->join('packages', 'packages.id', '=', 'p2.package_id')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                        ->where('inventories.shop_id', $shopId)
+                        ->whereColumn('p2.package_id', 'products.package_id')
+                        ->whereNotNull('products.package_id');
+                })
+                ->orWhereExists(function ($sub) use ($userId) {
+                    $sub->select(DB::raw(1))
+                        ->from('packages')
+                        ->join('categories', 'packages.category_id', '=', 'categories.id')
+                        ->whereColumn('packages.id', 'products.package_id')
+                        ->where('categories.user_id', $userId);
+                })
+                ->orWhereNull('products.package_id');
+            })
+            ->count(DB::raw('DISTINCT products.id'));
     }
 
     public function getPendingPurchases(int $shopId): int

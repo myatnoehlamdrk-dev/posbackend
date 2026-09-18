@@ -46,6 +46,6 @@ class PurchaseItemService
     {
         $this->purchaseItemRepository->delete($purchaseItem);
 
-        return response()->json(['message' => 'Purchase item deleted successfully.']);
+        return response()->json(null, 204);
     }
 }

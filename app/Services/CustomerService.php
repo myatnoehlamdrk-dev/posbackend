@@ -56,7 +56,7 @@ class CustomerService
     {
         $this->customerRepository->delete($customer);
 
-        return response()->json(['message' => 'Customer deleted successfully.']);
+        return response()->json(null, 204);
     }
 
     public function analytics(int $shopId): JsonResponse

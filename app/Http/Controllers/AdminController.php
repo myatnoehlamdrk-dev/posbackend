@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ApproveUserRequest;
 use App\Http\Resources\ShopResource;
 use App\Http\Resources\UserResource;
 use App\Models\Shop;
@@ -9,7 +10,6 @@ use App\Models\User;
 use App\Services\AdminDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 
 class AdminController extends Controller
 {
@@ -21,19 +21,19 @@ class AdminController extends Controller
 
     public function dashboard(): JsonResponse
     {
-        return $this->success($this->dashboardService->getStats());
+        return response()->json($this->dashboardService->getStats());
     }
 
     public function salesChart(Request $request): JsonResponse
     {
         $days = $request->integer('days', 7);
-        return $this->success($this->dashboardService->getSalesChart($days));
+        return response()->json($this->dashboardService->getSalesChart($days));
     }
 
     public function topProducts(Request $request): JsonResponse
     {
         $limit = $request->integer('limit', 10);
-        return $this->success($this->dashboardService->getTopProducts($limit));
+        return response()->json($this->dashboardService->getTopProducts($limit));
     }
 
     // ── Shops ──
@@ -62,7 +62,7 @@ class AdminController extends Controller
         $perPage = $request->integer('per_page', 20);
         $shops = $query->orderByDesc('id')->paginate($perPage);
 
-        return $this->success([
+        return response()->json([
             'shops' => $shops->getCollection()->map(fn ($shop) => [
                 'id' => (string) $shop->id,
                 'shopName' => $shop->shop_name,
@@ -89,7 +89,7 @@ class AdminController extends Controller
     {
         $shop->update(['is_active' => ! $shop->is_active]);
 
-        return $this->success(new ShopResource($shop->fresh()), 'Shop status updated');
+        return response()->json(new ShopResource($shop->fresh()));
     }
 
     public function destroyShop(Shop $shop): JsonResponse
@@ -97,7 +97,7 @@ class AdminController extends Controller
         $shop->users()->update(['shop_id' => null]);
         $shop->delete();
 
-        return $this->deleted('Shop deleted successfully');
+        return $this->deleted();
     }
 
     // ── Users ──
@@ -130,7 +130,7 @@ class AdminController extends Controller
         $perPage = $request->integer('per_page', 20);
         $users = $query->orderByDesc('id')->paginate($perPage);
 
-        return $this->success([
+        return response()->json([
             'users' => $users->getCollection()->map(fn ($user) => UserResource::make($user)->resolve($request)),
             'pagination' => [
                 'total' => $users->total(),
@@ -149,36 +149,32 @@ class AdminController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        return $this->success(
+        return response()->json(
             $users->map(fn ($user) => UserResource::make($user)->resolve(request()))
         );
     }
 
-    public function approveUser(Request $request, User $user): JsonResponse
+    public function approveUser(ApproveUserRequest $request, User $user): JsonResponse
     {
-        $request->validate([
-            'shop_id' => 'required|exists:shops,id',
-        ]);
-
         $user->update([
             'active_status' => true,
             'shop_id' => $request->input('shop_id'),
         ]);
 
-        return $this->success(UserResource::make($user->fresh()->load('shop'))->resolve($request), 'User approved successfully');
+        return response()->json(UserResource::make($user->fresh()->load('shop'))->resolve($request));
     }
 
     public function toggleUserActive(User $user): JsonResponse
     {
         $user->update(['active_status' => ! $user->active_status]);
 
-        return $this->success(UserResource::make($user->fresh()->load('shop'))->resolve(request()), 'User status updated');
+        return response()->json(UserResource::make($user->fresh()->load('shop'))->resolve(request()));
     }
 
     public function destroyUser(User $user): JsonResponse
     {
         $user->delete();
 
-        return $this->deleted('User deleted successfully');
+        return $this->deleted();
     }
 }

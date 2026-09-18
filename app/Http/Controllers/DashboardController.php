@@ -49,7 +49,8 @@ class DashboardController extends Controller
 
     public function all(Request $request): JsonResponse
     {
-        $shopId = $request->user()->shop_id;
+        $user = $request->user();
+        $shopId = $user->shop_id;
         if (empty($shopId)) {
             return response()->json([
                 'stats' => [
@@ -70,6 +71,6 @@ class DashboardController extends Controller
 
         $days = $request->integer('days', 30);
 
-        return response()->json($this->dashboardService->getAll($shopId, $days));
+        return response()->json($this->dashboardService->getAll($shopId, $user->id, $days));
     }
 }

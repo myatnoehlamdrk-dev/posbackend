@@ -17,7 +17,7 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
     {
         $user = $request->user();
 
-        $query = $this->model->query();
+        $query = $this->model->query()->where('active', true);
 
         if ($request->filled('inventoryId')) {
             $inventory = \App\Models\Inventory::where('shop_id', $user->shop_id)
@@ -62,7 +62,7 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
 
     public function delete(Category $category): bool
     {
-        return $category->delete();
+        return $category->update(['active' => false]);
     }
 
     public function countProducts(Category $category): int

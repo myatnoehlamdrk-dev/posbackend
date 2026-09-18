@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\Shop;
 use App\Models\User;
@@ -29,6 +30,7 @@ class AdminDashboardService
             'active_shops' => Shop::where('is_active', true)->count(),
             'total_users' => User::count(),
             'pending_approvals' => User::where('active_status', false)->where('is_verified', true)->count(),
+            'total_products' => Product::where('active', 1)->count(),
             'total_sales' => $totalSales->count,
             'total_revenue' => (int) $totalSales->total,
             'today_sales_count' => $todaySales->count,

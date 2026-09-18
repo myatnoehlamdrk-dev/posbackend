@@ -24,11 +24,12 @@ Route::prefix('auth')->group(function () {
     });
 });
 
-Route::apiResource('shops', App\Http\Controllers\ShopController::class);
-
 Route::apiResource('suppliers', App\Http\Controllers\SupplierController::class);
 
 Route::middleware('auth:sanctum')->group(function () {
+    Route::apiResource('shops', App\Http\Controllers\ShopController::class);
+    Route::patch('shops/{shop}', [App\Http\Controllers\ShopController::class, 'update']);
+
     Route::apiResource('packages', App\Http\Controllers\PackageController::class);
     Route::get('products/search', [App\Http\Controllers\ProductController::class, 'search']);
     Route::apiResource('products', App\Http\Controllers\ProductController::class);
@@ -46,6 +47,17 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('customers/analytics', [App\Http\Controllers\CustomerController::class, 'analytics']);
     Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search']);
     Route::apiResource('customers', App\Http\Controllers\CustomerController::class);
+
+    // PATCH routes for partial updates (same controller methods as PUT)
+    Route::patch('products/{product}', [App\Http\Controllers\ProductController::class, 'update']);
+    Route::patch('categories/{category}', [App\Http\Controllers\CategoryController::class, 'update']);
+    Route::patch('packages/{package}', [App\Http\Controllers\PackageController::class, 'update']);
+    Route::patch('sales/{sale}', [App\Http\Controllers\SaleController::class, 'update']);
+    Route::patch('orders/{order}', [App\Http\Controllers\OrderController::class, 'update']);
+    Route::patch('customers/{customer}', [App\Http\Controllers\CustomerController::class, 'update']);
+    Route::patch('inventories/{inventory}', [App\Http\Controllers\InventoryController::class, 'update']);
+    Route::patch('settings', [App\Http\Controllers\SettingController::class, 'update']);
+    Route::patch('auth/profile', [App\Http\Controllers\ProfileController::class, 'update']);
 
     Route::prefix('stock-alerts')->group(function () {
         Route::get('/', [App\Http\Controllers\StockAlertController::class, 'index']);

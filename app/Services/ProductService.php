@@ -128,7 +128,7 @@ class ProductService
 
         $this->productRepository->delete($product);
 
-        return response()->json(['message' => 'Product deleted successfully.']);
+        return response()->json(null, 204);
     }
 
     private function mergeIntoExisting(\App\Models\Product $product, array $data, ?int $stock, ?int $supplierId, ?array $variants): void

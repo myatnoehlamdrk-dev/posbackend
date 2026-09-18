@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreStockAlertRequest;
 use App\Models\Product;
 use App\Services\StockAlertService;
 use Illuminate\Http\JsonResponse;
@@ -25,21 +26,16 @@ class StockAlertController extends Controller
         return response()->json($alerts);
     }
 
-    public function store(Request $request, Product $product): JsonResponse
+    public function store(StoreStockAlertRequest $request, Product $product): JsonResponse
     {
-        $data = $request->validate([
-            'threshold' => ['nullable', 'integer', 'min:0'],
-            'isActive' => ['nullable', 'boolean'],
-        ]);
-
-        $alert = $this->stockAlertService->upsert($product->id, $request->user()->shop_id, $data);
+        $alert = $this->stockAlertService->upsert($product->id, $request->user()->shop_id, $request->validated());
         return response()->json($alert, 201);
     }
 
     public function destroy(Request $request, Product $product): JsonResponse
     {
         $this->stockAlertService->delete($product->id, $request->user()->shop_id);
-        return response()->json(['message' => 'Stock alert deleted.']);
+        return response()->json(null, 204);
     }
 
     public function check(Request $request): JsonResponse

@@ -71,6 +71,6 @@ class PackageService
     {
         $this->packageRepository->delete($package);
 
-        return response()->json(['message' => 'Package deleted successfully.']);
+        return response()->json(null, 204);
     }
 }

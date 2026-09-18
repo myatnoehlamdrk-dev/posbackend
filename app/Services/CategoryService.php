@@ -72,6 +72,6 @@ class CategoryService
     {
         $this->categoryRepository->delete($category);
 
-        return response()->json(['message' => 'Category deleted successfully.']);
+        return response()->json(null, 204);
     }
 }

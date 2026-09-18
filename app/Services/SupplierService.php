@@ -40,7 +40,7 @@ class SupplierService
     {
         $this->supplierRepository->delete($supplier);
 
-        return response()->json(['message' => 'Supplier deleted successfully.']);
+        return response()->json(null, 204);
     }
 
     public function resolveOrCreate(?int $supplierId, ?string $supplierName): ?int

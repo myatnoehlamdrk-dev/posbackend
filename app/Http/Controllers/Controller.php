@@ -45,8 +45,8 @@ abstract class Controller
         return $this->error($message, 404);
     }
 
-    protected function deleted(string $message = 'Deleted successfully'): JsonResponse
+    protected function deleted(): JsonResponse
     {
-        return $this->success(null, $message);
+        return response()->json(null, 204);
     }
 }

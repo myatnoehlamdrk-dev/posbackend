@@ -10,9 +10,9 @@ interface DashboardRepositoryInterface
     public function getTodaySales(int $shopId, Carbon $today): array;
     public function getMonthSales(int $shopId, Carbon $monthStart): array;
     public function getPendingOrders(int $shopId): int;
-    public function getTotalProducts(int $shopId): int;
-    public function getInStockCount(int $shopId): int;
-    public function getLowStockCount(int $shopId): int;
+    public function getTotalProducts(int $shopId, int $userId): int;
+    public function getInStockCount(int $shopId, int $userId): int;
+    public function getLowStockCount(int $shopId, int $userId): int;
     public function getPendingPurchases(int $shopId): int;
     public function getAllTimeSales(int $shopId): int;
     public function getSalesChart(int $shopId, int $days = 7): array;

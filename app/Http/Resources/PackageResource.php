@@ -20,6 +20,7 @@ class PackageResource extends JsonResource
 
         return [
             'id' => (string) $this->id,
+            'active' => (bool) $this->active,
             'categoryId' => (string) $this->category_id,
             'name' => $this->name,
             'amountOfProduct' => $this->products_count ?? $this->amount_of_product,

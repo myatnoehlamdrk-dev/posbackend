@@ -47,6 +47,11 @@ class ShopController extends Controller
 
     public function update(Request $request, Shop $shop): JsonResponse
     {
+        $role = strtolower(trim($request->user()->role ?? ''));
+        if ($role !== 'owner') {
+            return response()->json(['message' => 'Only the shop owner can update shop data.'], 403);
+        }
+
         $data = $request->validate([
             'logoUrl' => ['nullable', 'string'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
