@@ -20,6 +20,11 @@ class CategoryController extends Controller
         return $this->categoryService->listForShop($request);
     }
 
+    public function withProducts(Request $request): JsonResponse
+    {
+        return $this->categoryService->withProducts($request);
+    }
+
     public function store(StoreCategoryRequest $request): JsonResponse
     {
         return $this->categoryService->create($request->validated(), $request->user()->shop_id, $request->user()->id);

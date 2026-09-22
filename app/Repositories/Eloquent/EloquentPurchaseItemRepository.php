@@ -8,7 +8,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 
 class EloquentPurchaseItemRepository implements PurchaseItemRepositoryInterface
 {
-    public function list(int $shopId, ?string $status = null): LengthAwarePaginator
+    public function list(int $shopId, ?string $status = null, int $perPage = 10): LengthAwarePaginator
     {
         $query = PurchaseItem::with('supplier', 'user', 'createdByUser', 'updatedByUser')
             ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId));
@@ -17,7 +17,7 @@ class EloquentPurchaseItemRepository implements PurchaseItemRepositoryInterface
             $query->where('status', 'pending');
         }
 
-        return $query->latest()->paginate(20);
+        return $query->latest()->paginate($perPage);
     }
 
     public function create(array $data, ?int $userId, ?int $createdBy = null): PurchaseItem

@@ -32,6 +32,10 @@ class EloquentProductRepository implements ProductRepositoryInterface
             $query->where('package_id', $request->integer('packageId'));
         }
 
+        if ($request->filled('categoryId')) {
+            $query->whereHas('package', fn ($q) => $q->where('category_id', $request->integer('categoryId')));
+        }
+
         if ($request->filled('search')) {
             $search = $request->input('search');
             $query->where(function ($q) use ($search) {
@@ -41,13 +45,38 @@ class EloquentProductRepository implements ProductRepositoryInterface
             });
         }
 
+        if ($request->filled('minPrice')) {
+            $query->where('stock', '>=', $request->integer('minPrice'));
+        }
+
+        if ($request->filled('maxPrice')) {
+            $query->where('stock', '<=', $request->integer('maxPrice'));
+        }
+
+        if ($request->filled('inStock')) {
+            if ($request->input('inStock') === 'true') {
+                $query->where('stock', '>', 0);
+            } else {
+                $query->where('stock', '=', 0);
+            }
+        }
+
         $query->where(function ($q) use ($user) {
             $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
               ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
               ->orWhereNull('package_id');
         });
 
-        return $query->latest()->paginate(20);
+        $sort = $request->input('sort', 'created_at');
+        $order = $request->input('order', 'desc');
+        $allowedSorts = ['name', 'stock', 'created_at', 'brand'];
+        if (in_array($sort, $allowedSorts)) {
+            $query->orderBy($sort, $order === 'asc' ? 'asc' : 'desc');
+        } else {
+            $query->latest();
+        }
+
+        return $query->paginate($request->integer('per_page', 10));
     }
 
     public function search(string $query): Collection

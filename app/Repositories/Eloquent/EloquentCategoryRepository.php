@@ -69,4 +69,55 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
     {
         return $category->packages()->sum('amount_of_product');
     }
+
+    public function listForShopWithProducts(Request $request, int $productLimit = 4): \Illuminate\Support\Collection
+    {
+        $user = $request->user();
+
+        $query = $this->model->query()->where('active', true);
+
+        if ($request->filled('inventoryId')) {
+            $inventory = \App\Models\Inventory::where('shop_id', $user->shop_id)
+                ->findOrFail($request->integer('inventoryId'));
+            $query->where('inventory_id', $inventory->id);
+
+            if ($inventory->type === 'self') {
+                $query->where('user_id', $user->id);
+            }
+        } else {
+            $query->whereHas('inventory', function ($q) use ($user, $request) {
+                $q->where('shop_id', $user->shop_id);
+                if ($request->filled('type')) {
+                    $q->where('type', $request->input('type'));
+                }
+            });
+
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('inventory', fn ($iq) => $iq->where('type', 'public'))
+                  ->orWhere('user_id', $user->id);
+            });
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('name', 'like', "%{$search}%");
+        }
+
+        $categories = $query->withCount('packages')
+            ->with('inventory', 'createdByUser', 'updatedByUser')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        foreach ($categories as $category) {
+            $products = \App\Models\Product::where('active', true)
+                ->whereHas('package', fn ($q) => $q->where('category_id', $category->id))
+                ->with('package.category.inventory', 'supplier')
+                ->limit($productLimit)
+                ->get();
+
+            $category->setRelation('displayProducts', $products);
+        }
+
+        return $categories->filter(fn ($cat) => $cat->displayProducts->isNotEmpty())->values();
+    }
 }

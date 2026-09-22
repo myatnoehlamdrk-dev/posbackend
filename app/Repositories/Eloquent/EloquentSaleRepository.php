@@ -21,7 +21,7 @@ class EloquentSaleRepository implements SaleRepositoryInterface
         return $this->model->with('saleItems', 'createdByUser', 'updatedByUser')
             ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
             ->latest()
-            ->paginate(20);
+            ->paginate($request->integer('per_page', 10));
     }
 
     public function findById(int $id): ?Sale

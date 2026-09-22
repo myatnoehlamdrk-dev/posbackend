@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Http\Resources\CategoryResource;
+use App\Http\Resources\CategoryWithProductsResource;
 use App\Models\Inventory;
 use App\Repositories\Contracts\CategoryRepositoryInterface;
 use Illuminate\Http\JsonResponse;
@@ -26,6 +27,22 @@ class CategoryService
         ]);
 
         return response()->json(CategoryResource::collection($this->categoryRepository->listForShop($request)));
+    }
+
+    public function withProducts(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $request->validate([
+            'inventoryId' => ['sometimes', 'nullable', 'integer'],
+            'type' => ['sometimes', 'nullable', Rule::in(['self', 'public'])],
+            'productLimit' => ['sometimes', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $productLimit = $request->integer('productLimit', 4);
+        $categories = $this->categoryRepository->listForShopWithProducts($request, $productLimit);
+
+        return response()->json(CategoryWithProductsResource::collection($categories));
     }
 
     public function create(array $data, int $shopId, ?int $userId = null): JsonResponse

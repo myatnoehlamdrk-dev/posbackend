@@ -34,6 +34,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('products/search', [App\Http\Controllers\ProductController::class, 'search']);
     Route::apiResource('products', App\Http\Controllers\ProductController::class);
     Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
+    Route::get('categories/with-products', [App\Http\Controllers\CategoryController::class, 'withProducts']);
     Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
     Route::apiResource('sales', App\Http\Controllers\SaleController::class);
     Route::delete('sales/{sale}/items/{saleItem}', [App\Http\Controllers\SaleController::class, 'destroyItem']);

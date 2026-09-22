@@ -17,7 +17,8 @@ class PurchaseItemService
     public function list(Request $request): JsonResponse
     {
         $shopId = $request->user()->shop_id;
-        $items = $this->purchaseItemRepository->list($shopId, $request->input('status'));
+        $perPage = $request->integer('per_page', 10);
+        $items = $this->purchaseItemRepository->list($shopId, $request->input('status'), $perPage);
 
         return response()->json(PurchaseItemResource::collection($items));
     }

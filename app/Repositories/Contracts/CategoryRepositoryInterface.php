@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 interface CategoryRepositoryInterface
 {
     public function listForShop(Request $request): \Illuminate\Contracts\Pagination\LengthAwarePaginator;
+    public function listForShopWithProducts(Request $request, int $productLimit = 4): \Illuminate\Support\Collection;
     public function findById(int $id): ?Category;
     public function create(array $data): Category;
     public function update(Category $category, array $data): Category;
