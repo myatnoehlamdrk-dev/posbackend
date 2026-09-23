@@ -41,6 +41,18 @@ class DashboardController extends Controller
         return response()->json($this->dashboardService->getCategoryTrend($request->user()->shop_id, $days));
     }
 
+    public function monthlySales(Request $request): JsonResponse
+    {
+        $shopId = $request->user()->shop_id;
+        $year = $request->integer('year', (int) date('Y'));
+
+        return response()->json([
+            'year' => $year,
+            'years' => $this->dashboardService->getSalesYears($shopId),
+            'months' => $this->dashboardService->getMonthlySales($shopId, $year),
+        ]);
+    }
+
     public function leastProducts(Request $request): JsonResponse
     {
         $limit = $request->integer('limit', 3);
@@ -63,9 +75,11 @@ class DashboardController extends Controller
                     'pending_purchases' => 0,
                     'total_sales' => 0,
                 ],
-                'category_trend' => [],
+                'category_distribution' => [],
+                'category_quantity' => [],
                 'top_products' => [],
                 'least_products' => [],
+                'no_bought_products' => [],
             ]);
         }
 

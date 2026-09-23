@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\AddOrderItemsRequest;
 use App\Http\Requests\StoreOrderRequest;
 use App\Http\Requests\UpdateOrderRequest;
 use App\Models\Order;
@@ -38,5 +39,10 @@ class OrderController extends Controller
     public function destroy(Order $order): JsonResponse
     {
         return $this->orderService->delete($order);
+    }
+
+    public function addItems(AddOrderItemsRequest $request, Order $order): JsonResponse
+    {
+        return $this->orderService->addItems($request->validated(), $order);
     }
 }

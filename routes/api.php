@@ -32,6 +32,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('packages', App\Http\Controllers\PackageController::class);
     Route::get('products/search', [App\Http\Controllers\ProductController::class, 'search']);
+    Route::get('products/latest', [App\Http\Controllers\ProductController::class, 'latest']);
     Route::apiResource('products', App\Http\Controllers\ProductController::class);
     Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
     Route::get('categories/with-products', [App\Http\Controllers\CategoryController::class, 'withProducts']);
@@ -40,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('sales/{sale}/items/{saleItem}', [App\Http\Controllers\SaleController::class, 'destroyItem']);
     Route::get('sales/{sale}/voucher', [App\Http\Controllers\PdfController::class, 'generateVoucher']);
     Route::apiResource('orders', App\Http\Controllers\OrderController::class);
+    Route::post('orders/{order}/items', [App\Http\Controllers\OrderController::class, 'addItems']);
     Route::apiResource('purchase-items', App\Http\Controllers\PurchaseItemController::class);
 
     Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
@@ -88,6 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/recent-sales', [App\Http\Controllers\DashboardController::class, 'recentSales']);
         Route::get('/category-trend', [App\Http\Controllers\DashboardController::class, 'categoryTrend']);
         Route::get('/least-products', [App\Http\Controllers\DashboardController::class, 'leastProducts']);
+        Route::get('/monthly-sales', [App\Http\Controllers\DashboardController::class, 'monthlySales']);
     });
 });
 

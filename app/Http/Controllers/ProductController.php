@@ -25,6 +25,11 @@ class ProductController extends Controller
         return $this->productService->search($request);
     }
 
+    public function latest(Request $request): JsonResponse
+    {
+        return $this->productService->latest($request);
+    }
+
     public function store(StoreProductRequest $request): JsonResponse
     {
         return $this->productService->create($request->validated(), $request->user()->id);

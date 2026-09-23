@@ -79,6 +79,30 @@ class EloquentProductRepository implements ProductRepositoryInterface
         return $query->paginate($request->integer('per_page', 10));
     }
 
+    public function latestForShop(Request $request, int $limit): Collection
+    {
+        $user = $request->user();
+
+        return $this->model->query()
+            ->where('active', true)
+            ->where(function ($q) use ($user) {
+                $q->whereHas('package.category.inventory', function ($iq) use ($user) {
+                    $iq->where('shop_id', $user->shop_id);
+                })
+                ->orWhereNull('package_id');
+            })
+            ->where(function ($q) use ($user) {
+                $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
+                  ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
+                  ->orWhereNull('package_id');
+            })
+            ->with('package.category.inventory', 'supplier', 'createdByUser', 'updatedByUser')
+            ->orderByDesc('updated_at')
+            ->orderByDesc('created_at')
+            ->limit($limit)
+            ->get();
+    }
+
     public function search(string $query): Collection
     {
         return $this->model->query()

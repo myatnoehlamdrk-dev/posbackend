@@ -9,6 +9,7 @@ use Illuminate\Support\Collection;
 interface ProductRepositoryInterface
 {
     public function listForShop(Request $request): \Illuminate\Contracts\Pagination\LengthAwarePaginator;
+    public function latestForShop(Request $request, int $limit): Collection;
     public function search(string $query): Collection;
     public function findById(int $id): ?Product;
     public function findByName(string $name): ?Product;

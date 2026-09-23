@@ -19,5 +19,10 @@ interface DashboardRepositoryInterface
     public function getTopProducts(int $shopId, int $limit = 5): array;
     public function getRecentSales(int $shopId, int $limit = 5): Collection;
     public function getCategoryTrend(int $shopId, int $days = 30): array;
+    public function getCategoryDistribution(int $shopId, int $userId): array;
+    public function getCategoryQuantitySold(int $shopId, int $days = 30): array;
+    public function getSalesYears(int $shopId): array;
+    public function getMonthlySales(int $shopId, int $year): array;
     public function getLeastProducts(int $shopId, int $limit = 3): array;
+    public function getNoBoughtProducts(int $shopId, int $limit = 3): array;
 }

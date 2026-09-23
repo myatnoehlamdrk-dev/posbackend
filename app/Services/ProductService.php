@@ -22,6 +22,17 @@ class ProductService
         return response()->json(ProductResource::collection($this->productRepository->listForShop($request)));
     }
 
+    public function latest(Request $request): JsonResponse
+    {
+        $request->validate([
+            'limit' => ['sometimes', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        $products = $this->productRepository->latestForShop($request, $request->integer('limit', 4));
+
+        return response()->json(ProductResource::collection($products));
+    }
+
     public function search(Request $request): JsonResponse
     {
         $products = $this->productRepository->search($request->input('q', ''));

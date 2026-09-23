@@ -136,4 +136,45 @@ class OrderService
 
         return response()->json(null, 204);
     }
+
+    public function addItems(array $data, Order $order): JsonResponse
+    {
+        try {
+            $order = DB::transaction(function () use ($data, $order) {
+                foreach ($data['items'] as $item) {
+                    if (!empty($item['productId'])) {
+                        $this->stockRepository->deduct(
+                            $item['productId'],
+                            $item['quantity'],
+                            $item['size'] ?? null,
+                            $item['color'] ?? null
+                        );
+                    }
+                }
+
+                $merged = array_merge($order->items ?? [], $data['items']);
+                $aggregated = $this->orderItemService->aggregate($merged);
+                $grandTotal = collect($merged)->sum('subtotal');
+
+                return $this->orderRepository->update($order, [
+                    'product_id' => $aggregated['product_ids'] ?: null,
+                    'product_name' => $aggregated['product_names'],
+                    'quantity_sold' => $aggregated['quantities'],
+                    'total_price' => $grandTotal,
+                    'price_per_unit' => $aggregated['price_per_unit'],
+                    'items' => $merged,
+                    'grand_total' => $grandTotal,
+                ]);
+            });
+        } catch (InsufficientStockException $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+                'product' => $e->productName(),
+                'requested' => $e->requested(),
+                'available' => $e->available(),
+            ], 422);
+        }
+
+        return response()->json(new OrderResource($this->orderRepository->findById($order->id)), 200);
+    }
 }

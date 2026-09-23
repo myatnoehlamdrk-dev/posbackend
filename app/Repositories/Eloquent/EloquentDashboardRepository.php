@@ -263,6 +263,106 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
         return $result;
     }
 
+    public function getCategoryDistribution(int $shopId, int $userId): array
+    {
+        return DB::table('categories')
+            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+            ->leftJoin('packages', 'packages.category_id', '=', 'categories.id')
+            ->leftJoin('products', 'products.package_id', '=', 'packages.id')
+            ->where(function ($q) use ($shopId, $userId) {
+                $q->where('inventories.shop_id', $shopId)
+                  ->orWhere('categories.user_id', $userId);
+            })
+            ->select(
+                'categories.name as category_name',
+                DB::raw('COUNT(DISTINCT CASE WHEN products.active = 1 THEN products.id END) as product_count')
+            )
+            ->groupBy('categories.name')
+            ->orderByDesc('product_count')
+            ->get()
+            ->toArray();
+    }
+
+    public function getCategoryQuantitySold(int $shopId, int $days = 30): array
+    {
+        $startDate = Carbon::now()->subDays($days)->startOfDay();
+
+        return DB::table('sale_items')
+            ->join('products', 'sale_items.product_id', '=', 'products.id')
+            ->join('packages', 'products.package_id', '=', 'packages.id')
+            ->join('categories', 'packages.category_id', '=', 'categories.id')
+            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+            ->where('inventories.shop_id', $shopId)
+            ->where('sale_items.created_at', '>=', $startDate)
+            ->select(
+                'categories.name as category_name',
+                DB::raw('COALESCE(SUM(sale_items.quantity), 0) as total_quantity')
+            )
+            ->groupBy('categories.name')
+            ->orderByDesc('total_quantity')
+            ->get()
+            ->toArray();
+    }
+
+    public function getNoBoughtProducts(int $shopId, int $limit = 3): array
+    {
+        return DB::table('products')
+            ->join('packages', 'products.package_id', '=', 'packages.id')
+            ->join('categories', 'packages.category_id', '=', 'categories.id')
+            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+            ->where('products.active', true)
+            ->where('inventories.shop_id', $shopId)
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('sale_items')
+                    ->whereColumn('sale_items.product_id', 'products.id');
+            })
+            ->select(
+                'products.name as product_name',
+                'products.image as product_image',
+                DB::raw('0 as total_quantity')
+            )
+            ->limit($limit)
+            ->get()
+            ->toArray();
+    }
+
+    public function getSalesYears(int $shopId): array
+    {
+        return Sale::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->whereNotNull('created_at')
+            ->select(DB::raw('YEAR(created_at) as year'))
+            ->distinct()
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->map(fn ($y) => (int)$y)
+            ->all();
+    }
+
+    public function getMonthlySales(int $shopId, int $year): array
+    {
+        $totals = Sale::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->whereYear('created_at', $year)
+            ->select(
+                DB::raw('MONTH(created_at) as month'),
+                DB::raw('COALESCE(SUM(grand_total), 0) as total')
+            )
+            ->groupBy('month')
+            ->pluck('total', 'month')
+            ->map(fn ($v) => (int)$v)
+            ->all();
+
+        $months = [];
+        for ($m = 1; $m <= 12; $m++) {
+            $months[] = [
+                'month' => $m,
+                'total' => $totals[$m] ?? 0,
+            ];
+        }
+
+        return $months;
+    }
+
     public function getLeastProducts(int $shopId, int $limit = 3): array
     {
         return DB::table('sale_items')
