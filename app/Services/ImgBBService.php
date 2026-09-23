@@ -29,15 +29,19 @@ class ImgBBService
      */
     public function upload(UploadedFile|string $image, ?string $name = null): array
     {
+        $client = Http::acceptJson()->withOptions([
+            'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4],
+        ]);
+
         if ($image instanceof UploadedFile) {
-            $response = Http::acceptJson()
+            $response = $client
                 ->attach('image', file_get_contents($image->getRealPath()), $image->getClientOriginalName())
                 ->post($this->baseUrl, array_filter([
                     'key' => $this->apiKey,
                     'name' => $name,
                 ]));
         } else {
-            $response = Http::acceptJson()
+            $response = $client
                 ->asForm()
                 ->post($this->baseUrl, array_filter([
                     'key' => $this->apiKey,
@@ -76,6 +80,9 @@ class ImgBBService
 
         try {
             $response = Http::acceptJson()
+                ->withOptions([
+                    'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4],
+                ])
                 ->asForm()
                 ->post('https://api.imgbb.com/1/image/delete', [
                     'key' => $this->apiKey,

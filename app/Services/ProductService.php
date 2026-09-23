@@ -35,7 +35,7 @@ class ProductService
 
     public function search(Request $request): JsonResponse
     {
-        $products = $this->productRepository->search($request->input('q', ''));
+        $products = $this->productRepository->search($request);
         return response()->json(ProductResource::collection($products));
     }
 

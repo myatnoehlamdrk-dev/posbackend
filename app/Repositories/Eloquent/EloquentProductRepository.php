@@ -16,17 +16,11 @@ class EloquentProductRepository implements ProductRepositoryInterface
 
     public function listForShop(Request $request): LengthAwarePaginator
     {
-        $user = $request->user();
-
         $query = $this->model->query()
             ->where('active', true)
-            ->where(function ($q) use ($user) {
-                $q->whereHas('package.category.inventory', function ($iq) use ($user) {
-                    $iq->where('shop_id', $user->shop_id);
-                })
-                ->orWhereNull('package_id');
-            })
             ->with('package.category.inventory', 'supplier', 'createdByUser', 'updatedByUser');
+
+        $this->applyShopScope($query, $request);
 
         if ($request->filled('packageId')) {
             $query->where('package_id', $request->integer('packageId'));
@@ -37,12 +31,7 @@ class EloquentProductRepository implements ProductRepositoryInterface
         }
 
         if ($request->filled('search')) {
-            $search = $request->input('search');
-            $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('brand', 'like', "%{$search}%")
-                  ->orWhere('sku', 'like', "%{$search}%");
-            });
+            $this->applyTokenizedSearch($query, $request->input('search'));
         }
 
         if ($request->filled('minPrice')) {
@@ -60,12 +49,6 @@ class EloquentProductRepository implements ProductRepositoryInterface
                 $query->where('stock', '=', 0);
             }
         }
-
-        $query->where(function ($q) use ($user) {
-            $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
-              ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
-              ->orWhereNull('package_id');
-        });
 
         $sort = $request->input('sort', 'created_at');
         $order = $request->input('order', 'desc');
@@ -103,14 +86,64 @@ class EloquentProductRepository implements ProductRepositoryInterface
             ->get();
     }
 
-    public function search(string $query): Collection
+    public function search(Request $request): Collection
     {
-        return $this->model->query()
-            ->where('active', true)
-            ->where('name', 'like', "%{$query}%")
+        $query = $this->model->query()
+            ->where('active', true);
+
+        $this->applyShopScope($query, $request);
+
+        $search = trim($request->input('q', ''));
+        if ($search !== '') {
+            $this->applyTokenizedSearch($query, $search);
+
+            $escaped = addcslashes($search, '%_\\');
+            $query->orderByRaw(
+                'CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END',
+                ['%' . $escaped . '%', $escaped . '%']
+            );
+        }
+
+        return $query
+            ->orderBy('name')
             ->with('supplier', 'package.category.inventory')
             ->limit(20)
             ->get();
+    }
+
+    private function applyShopScope(\Illuminate\Database\Eloquent\Builder $query, Request $request): void
+    {
+        $user = $request->user();
+
+        $query->where(function ($q) use ($user) {
+            $q->whereHas('package.category.inventory', function ($iq) use ($user) {
+                $iq->where('shop_id', $user->shop_id);
+            })
+            ->orWhereNull('package_id');
+        });
+
+        $query->where(function ($q) use ($user) {
+            $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
+              ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
+              ->orWhereNull('package_id');
+        });
+    }
+
+    private function applyTokenizedSearch(\Illuminate\Database\Eloquent\Builder $query, string $search): void
+    {
+        $tokens = preg_split('/\s+/', $search, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $tokens = array_slice($tokens, 0, 6);
+
+        foreach ($tokens as $token) {
+            $pattern = '%' . addcslashes($token, '%_\\') . '%';
+            $query->where(function ($q) use ($pattern) {
+                $q->where('name', 'like', $pattern)
+                  ->orWhere('brand', 'like', $pattern)
+                  ->orWhere('sku', 'like', $pattern)
+                  ->orWhereHas('package', fn ($pq) => $pq->where('name', 'like', $pattern))
+                  ->orWhereHas('package.category', fn ($cq) => $cq->where('name', 'like', $pattern));
+            });
+        }
     }
 
     public function findById(int $id): ?Product

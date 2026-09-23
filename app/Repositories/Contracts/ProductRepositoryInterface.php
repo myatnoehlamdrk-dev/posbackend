@@ -10,7 +10,7 @@ interface ProductRepositoryInterface
 {
     public function listForShop(Request $request): \Illuminate\Contracts\Pagination\LengthAwarePaginator;
     public function latestForShop(Request $request, int $limit): Collection;
-    public function search(string $query): Collection;
+    public function search(Request $request): Collection;
     public function findById(int $id): ?Product;
     public function findByName(string $name): ?Product;
     public function create(array $data): Product;
