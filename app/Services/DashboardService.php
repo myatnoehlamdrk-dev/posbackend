@@ -10,14 +10,25 @@ use Illuminate\Support\Facades\Cache;
 class DashboardService
 {
     private const CACHE_TTL = 60;
+    private const REVISION_KEY = 'dashboard-stock-revision-v1';
 
     public function __construct(
         protected DashboardRepositoryInterface $dashboardRepository,
     ) {}
 
+    public static function bust(): void
+    {
+        Cache::put(self::REVISION_KEY, (int) Cache::get(self::REVISION_KEY, 0) + 1);
+    }
+
+    private function revision(): int
+    {
+        return (int) Cache::get(self::REVISION_KEY, 0);
+    }
+
     public function getStats(int $shopId): array
     {
-        return Cache::remember("dashboard-stats-{$shopId}", self::CACHE_TTL, function () use ($shopId) {
+        return Cache::remember("dashboard-stats-{$shopId}-{$this->revision()}", self::CACHE_TTL, function () use ($shopId) {
             $today = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
 
@@ -86,7 +97,7 @@ class DashboardService
 
     public function getAll(int $shopId, int $userId, int $days = 30): array
     {
-        return Cache::remember("dashboard-all-{$shopId}-{$days}", self::CACHE_TTL, function () use ($shopId, $userId, $days) {
+        return Cache::remember("dashboard-all-{$shopId}-{$days}-{$this->revision()}", self::CACHE_TTL, function () use ($shopId, $userId, $days) {
             $today = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
 

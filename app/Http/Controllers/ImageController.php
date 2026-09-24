@@ -45,7 +45,7 @@ class ImageController extends Controller
             }
             $filename = uniqid('img_', true) . '.' . $file->getClientOriginalExtension();
             $file->move($dir, $filename);
-            $url = $request->getSchemeAndHttpHost() . '/uploads/' . $filename;
+            $url = '/uploads/' . $filename;
 
             return response()->json([
                 'url' => $url,

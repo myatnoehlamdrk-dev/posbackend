@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\InsufficientStockException;
 use App\Http\Resources\SaleResource;
+use App\Models\Order;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Repositories\Contracts\SaleRepositoryInterface;
@@ -35,6 +36,12 @@ class SaleService
                     $data['userId'] ?? null,
                     $data['userName'] ?? null
                 );
+
+                $convertedOrder = null;
+                if (!empty($data['orderId'])) {
+                    // The frontend passes the order's primary id here.
+                    $convertedOrder = Order::find($data['orderId']);
+                }
 
                 $aggregated = $this->orderItemService->aggregate($data['items']);
 
@@ -77,15 +84,12 @@ class SaleService
                     ]);
                 }
 
-                foreach ($data['items'] as $item) {
-                    if (!empty($item['productId'])) {
-                        $this->stockRepository->deduct(
-                            $item['productId'],
-                            $item['quantity'],
-                            $item['size'] ?? null,
-                            $item['color'] ?? null
-                        );
-                    }
+                if ($convertedOrder !== null) {
+                    // Every sale passes through add-to-cart/order, so stock is
+                    // already checked and deducted when the order is created.
+                    // The sale records the sale without checking stock; the
+                    // fulfilled order is removed without restoring stock.
+                    $convertedOrder->delete();
                 }
 
                 return $sale;

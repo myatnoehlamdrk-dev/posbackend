@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Factories\StockCalculatorFactory;
+use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,6 +45,13 @@ class Product extends Model
     public function supplier(): BelongsTo
     {
         return $this->belongsTo(Supplier::class);
+    }
+
+    protected static function booted(): void
+    {
+        static::created(fn () => DashboardService::bust());
+        static::updated(fn () => DashboardService::bust());
+        static::deleted(fn () => DashboardService::bust());
     }
 
     public function package(): BelongsTo
