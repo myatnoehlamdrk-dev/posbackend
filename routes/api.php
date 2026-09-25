@@ -26,8 +26,11 @@ Route::prefix('auth')->group(function () {
 
 Route::apiResource('suppliers', App\Http\Controllers\SupplierController::class);
 
+// Public: let unauthenticated users search existing shops before registering
+Route::get('shops', [App\Http\Controllers\ShopController::class, 'index']);
+
 Route::middleware('auth:sanctum')->group(function () {
-    Route::apiResource('shops', App\Http\Controllers\ShopController::class);
+    Route::apiResource('shops', App\Http\Controllers\ShopController::class)->except(['index']);
     Route::patch('shops/{shop}', [App\Http\Controllers\ShopController::class, 'update']);
 
     Route::apiResource('packages', App\Http\Controllers\PackageController::class);

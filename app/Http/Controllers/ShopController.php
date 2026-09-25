@@ -4,14 +4,41 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\ShopResource;
 use App\Models\Shop;
+use App\Services\FuzzySearchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ShopController extends Controller
 {
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(ShopResource::collection(Shop::latest()->paginate(20)));
+        $query = trim((string) $request->input('q', ''));
+
+        if ($query === '') {
+            return response()->json(ShopResource::collection(Shop::latest()->paginate(20)));
+        }
+
+        $matches = Shop::latest()->get()
+            ->filter(function (Shop $shop) use ($query) {
+                return FuzzySearchService::matchesAllTokens($query, [
+                    $shop->shop_name,
+                    $shop->shop_physical_address,
+                    $shop->owner_name,
+                ]);
+            })
+            ->map(fn (Shop $shop) => [
+                'shop' => $shop,
+                'score' => FuzzySearchService::queryScore($query, [
+                    $shop->shop_name,
+                    $shop->shop_physical_address,
+                    $shop->owner_name,
+                ]),
+            ])
+            ->sortByDesc(fn (array $entry) => [$entry['score'], $entry['shop']->shop_name])
+            ->take(20)
+            ->map(fn (array $entry) => $entry['shop']);
+
+        return response()->json(ShopResource::collection($matches->values()));
     }
 
     public function store(Request $request): JsonResponse

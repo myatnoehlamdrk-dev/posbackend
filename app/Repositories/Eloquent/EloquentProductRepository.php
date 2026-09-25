@@ -4,6 +4,7 @@ namespace App\Repositories\Eloquent;
 
 use App\Models\Product;
 use App\Repositories\Contracts\ProductRepositoryInterface;
+use App\Services\FuzzySearchService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -94,21 +95,45 @@ class EloquentProductRepository implements ProductRepositoryInterface
         $this->applyShopScope($query, $request);
 
         $search = trim($request->input('q', ''));
-        if ($search !== '') {
-            $this->applyTokenizedSearch($query, $search);
-
-            $escaped = addcslashes($search, '%_\\');
-            $query->orderByRaw(
-                'CASE WHEN name LIKE ? THEN 0 WHEN name LIKE ? THEN 1 ELSE 2 END',
-                ['%' . $escaped . '%', $escaped . '%']
-            );
+        if ($search === '') {
+            return $query
+                ->orderBy('name')
+                ->with('supplier', 'package.category.inventory')
+                ->limit(20)
+                ->get();
         }
 
-        return $query
-            ->orderBy('name')
+        $candidates = $query
             ->with('supplier', 'package.category.inventory')
-            ->limit(20)
-            ->get();
+            ->limit(300)
+            ->get()
+            ->filter(fn (Product $product) => FuzzySearchService::matchesAllTokens(
+                $search,
+                $this->searchFields($product),
+            ))
+            ->map(fn (Product $product) => [
+                'product' => $product,
+                'score' => FuzzySearchService::queryScore(
+                    $search,
+                    $this->searchFields($product),
+                ),
+            ])
+            ->sortBy(fn (array $entry) => [-$entry['score'], $entry['product']->name])
+            ->take(20)
+            ->map(fn (array $entry) => $entry['product']);
+
+        return $candidates->values();
+    }
+
+    private function searchFields(Product $product): array
+    {
+        return [
+            $product->name,
+            $product->brand,
+            $product->sku,
+            $product->package?->name,
+            $product->package?->category?->name,
+        ];
     }
 
     private function applyShopScope(\Illuminate\Database\Eloquent\Builder $query, Request $request): void
