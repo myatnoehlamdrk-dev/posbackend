@@ -26,9 +26,9 @@ class DashboardService
         return (int) Cache::get(self::REVISION_KEY, 0);
     }
 
-    public function getStats(int $shopId): array
+    public function getStats(int $shopId, int $userId): array
     {
-        return Cache::remember("dashboard-stats-{$shopId}-{$this->revision()}", self::CACHE_TTL, function () use ($shopId) {
+        return Cache::remember("dashboard-stats-{$shopId}-{$userId}-{$this->revision()}", self::CACHE_TTL, function () use ($shopId, $userId) {
             $today = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
 
@@ -36,9 +36,9 @@ class DashboardService
                 'today_sales' => $this->dashboardRepository->getTodaySales($shopId, $today),
                 'month_sales' => $this->dashboardRepository->getMonthSales($shopId, $monthStart),
                 'pending_orders' => $this->dashboardRepository->getPendingOrders($shopId),
-                'total_products' => $this->dashboardRepository->getTotalProducts($shopId),
-                'in_stock' => $this->dashboardRepository->getInStockCount($shopId),
-                'low_stock_count' => $this->dashboardRepository->getLowStockCount($shopId),
+                'total_products' => $this->dashboardRepository->getTotalProducts($shopId, $userId),
+                'in_stock' => $this->dashboardRepository->getInStockCount($shopId, $userId),
+                'low_stock_count' => $this->dashboardRepository->getLowStockCount($shopId, $userId),
                 'pending_purchases' => $this->dashboardRepository->getPendingPurchases($shopId),
                 'total_sales' => $this->dashboardRepository->getAllTimeSales($shopId),
             ];
@@ -97,7 +97,7 @@ class DashboardService
 
     public function getAll(int $shopId, int $userId, int $days = 30): array
     {
-        return Cache::remember("dashboard-all-{$shopId}-{$days}-{$this->revision()}", self::CACHE_TTL, function () use ($shopId, $userId, $days) {
+        return Cache::remember("dashboard-all-{$shopId}-{$userId}-{$days}-{$this->revision()}", self::CACHE_TTL, function () use ($shopId, $userId, $days) {
             $today = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
 

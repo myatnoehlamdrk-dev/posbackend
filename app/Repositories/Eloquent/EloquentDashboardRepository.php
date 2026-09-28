@@ -320,8 +320,15 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
                         ->whereColumn('packages.id', 'products.package_id')
                         ->where('categories.user_id', $userId);
                 })
-                // OR orphan product (no package)
-                ->orWhereNull('products.package_id');
+                // OR product was created by a user of this shop. This also attributes
+                // package-less products (quick add never sends a packageId) to their
+                // creator's shop, so they no longer leak into every shop's dashboard.
+                ->orWhereExists(function ($sub) use ($shopId) {
+                    $sub->select(DB::raw(1))
+                        ->from('users')
+                        ->whereColumn('users.id', 'products.created_by')
+                        ->where('users.shop_id', $shopId);
+                });
             });
     }
 

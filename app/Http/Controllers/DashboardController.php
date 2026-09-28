@@ -14,7 +14,9 @@ class DashboardController extends Controller
 
     public function stats(Request $request): JsonResponse
     {
-        return response()->json($this->dashboardService->getStats($request->user()->shop_id));
+        $user = $request->user();
+
+        return response()->json($this->dashboardService->getStats($user->shop_id, $user->id));
     }
 
     public function salesChart(Request $request): JsonResponse

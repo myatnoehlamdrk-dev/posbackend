@@ -4,6 +4,7 @@ namespace App\Repositories\Eloquent;
 
 use App\Models\Product;
 use App\Repositories\Contracts\ProductRepositoryInterface;
+use App\Repositories\Eloquent\Concerns\ProductShopScope;
 use App\Services\FuzzySearchService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -65,21 +66,12 @@ class EloquentProductRepository implements ProductRepositoryInterface
 
     public function latestForShop(Request $request, int $limit): Collection
     {
-        $user = $request->user();
+        $query = $this->model->query()
+            ->where('active', true);
 
-        return $this->model->query()
-            ->where('active', true)
-            ->where(function ($q) use ($user) {
-                $q->whereHas('package.category.inventory', function ($iq) use ($user) {
-                    $iq->where('shop_id', $user->shop_id);
-                })
-                ->orWhereNull('package_id');
-            })
-            ->where(function ($q) use ($user) {
-                $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
-                  ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
-                  ->orWhereNull('package_id');
-            })
+        $this->applyShopScope($query, $request);
+
+        return $query
             ->with('package.category.inventory', 'supplier', 'createdByUser', 'updatedByUser')
             ->orderByDesc('updated_at')
             ->orderByDesc('created_at')
@@ -144,13 +136,17 @@ class EloquentProductRepository implements ProductRepositoryInterface
             $q->whereHas('package.category.inventory', function ($iq) use ($user) {
                 $iq->where('shop_id', $user->shop_id);
             })
-            ->orWhereNull('package_id');
+            ->orWhere(function ($oq) use ($user) {
+                ProductShopScope::applyOrphan($oq, $user->shop_id);
+            });
         });
 
         $query->where(function ($q) use ($user) {
             $q->whereHas('package.category.inventory', fn ($iq) => $iq->where('type', 'public'))
               ->orWhereHas('package.category', fn ($cq) => $cq->where('user_id', $user->id))
-              ->orWhereNull('package_id');
+              ->orWhere(function ($oq) use ($user) {
+                  ProductShopScope::applyOrphan($oq, $user->shop_id);
+              });
         });
     }
 
