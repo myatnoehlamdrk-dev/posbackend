@@ -94,6 +94,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/category-trend', [App\Http\Controllers\DashboardController::class, 'categoryTrend']);
         Route::get('/least-products', [App\Http\Controllers\DashboardController::class, 'leastProducts']);
         Route::get('/monthly-sales', [App\Http\Controllers\DashboardController::class, 'monthlySales']);
+        Route::get('/tables/products', [App\Http\Controllers\DashboardController::class, 'productsTable']);
+        Route::get('/tables/stock', [App\Http\Controllers\DashboardController::class, 'stockTable']);
+        Route::get('/tables/sales', [App\Http\Controllers\DashboardController::class, 'salesTable']);
+        Route::get('/tables/bought-products', [App\Http\Controllers\DashboardController::class, 'boughtProductsTable']);
+        Route::get('/tables/no-bought-products', [App\Http\Controllers\DashboardController::class, 'noBoughtProductsTable']);
     });
 });
 

@@ -2,6 +2,7 @@
 
 namespace App\Repositories\Contracts;
 
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -25,4 +26,11 @@ interface DashboardRepositoryInterface
     public function getMonthlySales(int $shopId, int $year): array;
     public function getLeastProducts(int $shopId, int $limit = 3): array;
     public function getNoBoughtProducts(int $shopId, int $limit = 3): array;
+
+    // Row-level tables behind the dashboard "View all" links.
+    public function paginateProductsTable(int $shopId, int $userId, int $page = 1, int $perPage = 15, ?string $search = null): LengthAwarePaginator;
+    public function paginateStockTable(int $shopId, int $userId, int $page = 1, int $perPage = 15, bool $lowOnly = false, ?string $search = null): LengthAwarePaginator;
+    public function paginateSalesTable(int $shopId, int $page = 1, int $perPage = 15, ?string $search = null, ?string $from = null, ?string $to = null): LengthAwarePaginator;
+    public function paginateBoughtProductsTable(int $shopId, int $page = 1, int $perPage = 15, string $direction = 'desc', int $days = 30, ?string $search = null): LengthAwarePaginator;
+    public function paginateNoBoughtProductsTable(int $shopId, int $page = 1, int $perPage = 15, ?string $search = null): LengthAwarePaginator;
 }

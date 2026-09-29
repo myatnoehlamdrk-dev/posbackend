@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Repositories\Contracts\DashboardRepositoryInterface;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -93,6 +94,31 @@ class DashboardService
     public function getNoBoughtProducts(int $shopId, int $limit = 3): array
     {
         return $this->dashboardRepository->getNoBoughtProducts($shopId, $limit);
+    }
+
+    public function paginateProductsTable(int $shopId, int $userId, int $page, int $perPage, ?string $search): LengthAwarePaginator
+    {
+        return $this->dashboardRepository->paginateProductsTable($shopId, $userId, $page, $perPage, $search);
+    }
+
+    public function paginateStockTable(int $shopId, int $userId, int $page, int $perPage, bool $lowOnly, ?string $search): LengthAwarePaginator
+    {
+        return $this->dashboardRepository->paginateStockTable($shopId, $userId, $page, $perPage, $lowOnly, $search);
+    }
+
+    public function paginateSalesTable(int $shopId, int $page, int $perPage, ?string $search, ?string $from, ?string $to): LengthAwarePaginator
+    {
+        return $this->dashboardRepository->paginateSalesTable($shopId, $page, $perPage, $search, $from, $to);
+    }
+
+    public function paginateBoughtProductsTable(int $shopId, int $page, int $perPage, string $direction, int $days, ?string $search): LengthAwarePaginator
+    {
+        return $this->dashboardRepository->paginateBoughtProductsTable($shopId, $page, $perPage, $direction, $days, $search);
+    }
+
+    public function paginateNoBoughtProductsTable(int $shopId, int $page, int $perPage, ?string $search): LengthAwarePaginator
+    {
+        return $this->dashboardRepository->paginateNoBoughtProductsTable($shopId, $page, $perPage, $search);
     }
 
     public function getAll(int $shopId, int $userId, int $days = 30): array

@@ -7,12 +7,21 @@ use App\Models\Product;
 use App\Models\PurchaseItem;
 use App\Models\Sale;
 use App\Repositories\Contracts\DashboardRepositoryInterface;
+use App\Repositories\Eloquent\Concerns\DashboardTableQueries;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class EloquentDashboardRepository implements DashboardRepositoryInterface
 {
+    use DashboardTableQueries;
+
+    /**
+     * Shared by the low-stock count and the low-stock table so the number on the
+     * card and the rows behind it can never disagree.
+     */
+    private const LOW_STOCK_THRESHOLD = 5;
+
     public function getTodaySales(int $shopId, Carbon $today): array
     {
         $result = Sale::where('created_at', '>=', $today)
@@ -55,7 +64,7 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
     public function getLowStockCount(int $shopId, int $userId): int
     {
         return $this->scopedProducts($shopId, $userId)
-            ->filter(fn (Product $product) => $product->getAvailableStock() > 0 && $product->getAvailableStock() <= 5)
+            ->filter(fn (Product $product) => $product->getAvailableStock() > 0 && $product->getAvailableStock() <= self::LOW_STOCK_THRESHOLD)
             ->count();
     }
 
