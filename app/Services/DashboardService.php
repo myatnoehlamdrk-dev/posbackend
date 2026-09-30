@@ -91,34 +91,34 @@ class DashboardService
         return $this->dashboardRepository->getLeastProducts($shopId, $limit);
     }
 
-    public function getNoBoughtProducts(int $shopId, int $limit = 3): array
+    public function getNoBoughtProducts(int $shopId, int $userId, int $limit = 3): array
     {
-        return $this->dashboardRepository->getNoBoughtProducts($shopId, $limit);
+        return $this->dashboardRepository->getNoBoughtProducts($shopId, $userId, $limit);
     }
 
-    public function paginateProductsTable(int $shopId, int $userId, int $page, int $perPage, ?string $search): LengthAwarePaginator
+    public function paginateProductsTable(int $shopId, int $userId, int $page, int $perPage): LengthAwarePaginator
     {
-        return $this->dashboardRepository->paginateProductsTable($shopId, $userId, $page, $perPage, $search);
+        return $this->dashboardRepository->paginateProductsTable($shopId, $userId, $page, $perPage);
     }
 
-    public function paginateStockTable(int $shopId, int $userId, int $page, int $perPage, bool $lowOnly, ?string $search): LengthAwarePaginator
+    public function paginateStockTable(int $shopId, int $userId, int $page, int $perPage, bool $lowOnly): LengthAwarePaginator
     {
-        return $this->dashboardRepository->paginateStockTable($shopId, $userId, $page, $perPage, $lowOnly, $search);
+        return $this->dashboardRepository->paginateStockTable($shopId, $userId, $page, $perPage, $lowOnly);
     }
 
-    public function paginateSalesTable(int $shopId, int $page, int $perPage, ?string $search, ?string $from, ?string $to): LengthAwarePaginator
+    public function paginateSalesTable(int $shopId, int $page, int $perPage, ?string $month): LengthAwarePaginator
     {
-        return $this->dashboardRepository->paginateSalesTable($shopId, $page, $perPage, $search, $from, $to);
+        return $this->dashboardRepository->paginateSalesTable($shopId, $page, $perPage, $month);
     }
 
-    public function paginateBoughtProductsTable(int $shopId, int $page, int $perPage, string $direction, int $days, ?string $search): LengthAwarePaginator
+    public function paginateBoughtProductsTable(int $shopId, int $userId, int $page, int $perPage, string $direction): LengthAwarePaginator
     {
-        return $this->dashboardRepository->paginateBoughtProductsTable($shopId, $page, $perPage, $direction, $days, $search);
+        return $this->dashboardRepository->paginateBoughtProductsTable($shopId, $userId, $page, $perPage, $direction);
     }
 
-    public function paginateNoBoughtProductsTable(int $shopId, int $page, int $perPage, ?string $search): LengthAwarePaginator
+    public function paginateNoBoughtProductsTable(int $shopId, int $userId, int $page, int $perPage): LengthAwarePaginator
     {
-        return $this->dashboardRepository->paginateNoBoughtProductsTable($shopId, $page, $perPage, $search);
+        return $this->dashboardRepository->paginateNoBoughtProductsTable($shopId, $userId, $page, $perPage);
     }
 
     public function getAll(int $shopId, int $userId, int $days = 30): array
@@ -142,7 +142,7 @@ class DashboardService
                 'category_quantity' => $this->dashboardRepository->getCategoryQuantitySold($shopId, $days),
                 'top_products' => $this->dashboardRepository->getTopProducts($shopId, 3),
                 'least_products' => $this->dashboardRepository->getLeastProducts($shopId, 3),
-                'no_bought_products' => $this->dashboardRepository->getNoBoughtProducts($shopId, 3),
+                'no_bought_products' => $this->dashboardRepository->getNoBoughtProducts($shopId, $userId, 3),
                 'recent_sales' => $this->dashboardRepository->getRecentSales($shopId, 5),
             ];
         });

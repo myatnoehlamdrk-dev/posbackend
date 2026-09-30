@@ -25,12 +25,13 @@ interface DashboardRepositoryInterface
     public function getSalesYears(int $shopId): array;
     public function getMonthlySales(int $shopId, int $year): array;
     public function getLeastProducts(int $shopId, int $limit = 3): array;
-    public function getNoBoughtProducts(int $shopId, int $limit = 3): array;
+    public function getNoBoughtProducts(int $shopId, int $userId, int $limit = 3): array;
 
-    // Row-level tables behind the dashboard "View all" links.
-    public function paginateProductsTable(int $shopId, int $userId, int $page = 1, int $perPage = 15, ?string $search = null): LengthAwarePaginator;
-    public function paginateStockTable(int $shopId, int $userId, int $page = 1, int $perPage = 15, bool $lowOnly = false, ?string $search = null): LengthAwarePaginator;
-    public function paginateSalesTable(int $shopId, int $page = 1, int $perPage = 15, ?string $search = null, ?string $from = null, ?string $to = null): LengthAwarePaginator;
-    public function paginateBoughtProductsTable(int $shopId, int $page = 1, int $perPage = 15, string $direction = 'desc', int $days = 30, ?string $search = null): LengthAwarePaginator;
-    public function paginateNoBoughtProductsTable(int $shopId, int $page = 1, int $perPage = 15, ?string $search = null): LengthAwarePaginator;
+    // Row-level tables behind the dashboard "View all" links. All of these are
+    // server-paginated; the client never asks for more than one page at a time.
+    public function paginateProductsTable(int $shopId, int $userId, int $page = 1, int $perPage = 15): LengthAwarePaginator;
+    public function paginateStockTable(int $shopId, int $userId, int $page = 1, int $perPage = 15, bool $lowOnly = false): LengthAwarePaginator;
+    public function paginateSalesTable(int $shopId, int $page = 1, int $perPage = 15, ?string $month = null): LengthAwarePaginator;
+    public function paginateBoughtProductsTable(int $shopId, int $userId, int $page = 1, int $perPage = 15, string $direction = 'desc'): LengthAwarePaginator;
+    public function paginateNoBoughtProductsTable(int $shopId, int $userId, int $page = 1, int $perPage = 15): LengthAwarePaginator;
 }

@@ -7,6 +7,7 @@ use App\Repositories\Contracts\CategoryRepositoryInterface;
 use App\Repositories\Contracts\CustomerRepositoryInterface;
 use App\Repositories\Contracts\DashboardRepositoryInterface;
 use App\Repositories\Contracts\ExportRepositoryInterface;
+use App\Repositories\Contracts\FeedbackRepositoryInterface;
 use App\Repositories\Contracts\InventoryRepositoryInterface;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use App\Repositories\Contracts\PackageRepositoryInterface;
@@ -21,6 +22,7 @@ use App\Repositories\Eloquent\EloquentCategoryRepository;
 use App\Repositories\Eloquent\EloquentCustomerRepository;
 use App\Repositories\Eloquent\EloquentDashboardRepository;
 use App\Repositories\Eloquent\EloquentExportRepository;
+use App\Repositories\Eloquent\EloquentFeedbackRepository;
 use App\Repositories\Eloquent\EloquentInventoryRepository;
 use App\Repositories\Eloquent\EloquentOrderRepository;
 use App\Repositories\Eloquent\EloquentPackageRepository;
@@ -36,6 +38,7 @@ use App\Services\CategoryService;
 use App\Services\CustomerService;
 use App\Services\DashboardService;
 use App\Services\ExportService;
+use App\Services\FeedbackService;
 use App\Services\InventoryService;
 use App\Services\OrderItemService;
 use App\Services\OrderNumberService;
@@ -68,6 +71,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(InventoryRepositoryInterface::class, EloquentInventoryRepository::class);
         $this->app->bind(PurchaseItemRepositoryInterface::class, EloquentPurchaseItemRepository::class);
         $this->app->bind(AuditRepositoryInterface::class, EloquentAuditRepository::class);
+        $this->app->bind(FeedbackRepositoryInterface::class, EloquentFeedbackRepository::class);
 
         // Services
         $this->app->singleton(UserResolutionService::class);
@@ -87,6 +91,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(DashboardService::class);
         $this->app->singleton(AdminDashboardService::class);
         $this->app->singleton(PurchaseItemService::class);
+        $this->app->singleton(FeedbackService::class);
     }
 
     public function boot(): void

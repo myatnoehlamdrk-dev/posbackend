@@ -220,14 +220,11 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             ->toArray();
     }
 
-    public function getNoBoughtProducts(int $shopId, int $limit = 3): array
+    public function getNoBoughtProducts(int $shopId, int $userId, int $limit = 3): array
     {
         return DB::table('products')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->where('products.active', true)
-            ->where('inventories.shop_id', $shopId)
+            ->where($this->productScope($shopId, $userId))
             ->whereNotExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('sale_items')
@@ -296,49 +293,66 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             ->toArray();
     }
 
+    /**
+     * The products that "belong" to this shop + user and therefore show up on
+     * this shop's dashboard. Each entry is one way a product can land here:
+     *
+     *   - it sits in this shop's category/inventory chain,
+     *   - it shares a package with a product that is,
+     *   - it lives in a category the user owns (any shop),
+     *   - it was created by one of this shop's users (which is how quick-added,
+     *     package-less products are attributed to their shop at all).
+     *
+     * Shared by the total, bought and never-bought product counts and tables so
+     * that the three always add up to the same universe.
+     */
+    private function productScope(int $shopId, int $userId): \Closure
+    {
+        return function ($q) use ($shopId, $userId) {
+            $q->whereExists(function ($sub) use ($shopId) {
+                $sub->select(DB::raw(1))
+                    ->from('packages')
+                    ->join('categories', 'packages.category_id', '=', 'categories.id')
+                    ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                    ->whereColumn('packages.id', 'products.package_id')
+                    ->where('inventories.shop_id', $shopId);
+            })
+            // OR product shares package_id with any product in this shop
+            ->orWhereExists(function ($sub) use ($shopId) {
+                $sub->select(DB::raw(1))
+                    ->from('products as p2')
+                    ->join('packages', 'packages.id', '=', 'p2.package_id')
+                    ->join('categories', 'packages.category_id', '=', 'categories.id')
+                    ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+                    ->where('inventories.shop_id', $shopId)
+                    ->whereColumn('p2.package_id', 'products.package_id')
+                    ->whereNotNull('products.package_id');
+            })
+            // OR product belongs to a category owned by this user (any shop)
+            ->orWhereExists(function ($sub) use ($userId) {
+                $sub->select(DB::raw(1))
+                    ->from('packages')
+                    ->join('categories', 'packages.category_id', '=', 'categories.id')
+                    ->whereColumn('packages.id', 'products.package_id')
+                    ->where('categories.user_id', $userId);
+            })
+            // OR product was created by a user of this shop. This also attributes
+            // package-less products (quick add never sends a packageId) to their
+            // creator's shop, so they no longer leak into every shop's dashboard.
+            ->orWhereExists(function ($sub) use ($shopId) {
+                $sub->select(DB::raw(1))
+                    ->from('users')
+                    ->whereColumn('users.id', 'products.created_by')
+                    ->where('users.shop_id', $shopId);
+            });
+        };
+    }
+
     private function scopedProductsQuery(int $shopId, int $userId): \Illuminate\Database\Eloquent\Builder
     {
         return Product::query()
             ->where('products.active', true)
-            ->where(function ($q) use ($shopId, $userId) {
-                // Product is in this shop's inventory chain
-                $q->whereExists(function ($sub) use ($shopId) {
-                    $sub->select(DB::raw(1))
-                        ->from('packages')
-                        ->join('categories', 'packages.category_id', '=', 'categories.id')
-                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
-                        ->whereColumn('packages.id', 'products.package_id')
-                        ->where('inventories.shop_id', $shopId);
-                })
-                // OR product shares package_id with any product in this shop
-                ->orWhereExists(function ($sub) use ($shopId) {
-                    $sub->select(DB::raw(1))
-                        ->from('products as p2')
-                        ->join('packages', 'packages.id', '=', 'p2.package_id')
-                        ->join('categories', 'packages.category_id', '=', 'categories.id')
-                        ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
-                        ->where('inventories.shop_id', $shopId)
-                        ->whereColumn('p2.package_id', 'products.package_id')
-                        ->whereNotNull('products.package_id');
-                })
-                // OR product belongs to a category owned by this user (any shop)
-                ->orWhereExists(function ($sub) use ($userId) {
-                    $sub->select(DB::raw(1))
-                        ->from('packages')
-                        ->join('categories', 'packages.category_id', '=', 'categories.id')
-                        ->whereColumn('packages.id', 'products.package_id')
-                        ->where('categories.user_id', $userId);
-                })
-                // OR product was created by a user of this shop. This also attributes
-                // package-less products (quick add never sends a packageId) to their
-                // creator's shop, so they no longer leak into every shop's dashboard.
-                ->orWhereExists(function ($sub) use ($shopId) {
-                    $sub->select(DB::raw(1))
-                        ->from('users')
-                        ->whereColumn('users.id', 'products.created_by')
-                        ->where('users.shop_id', $shopId);
-                });
-            });
+            ->where($this->productScope($shopId, $userId));
     }
 
     private function scopedProducts(int $shopId, int $userId): Collection

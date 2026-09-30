@@ -26,6 +26,12 @@ use Illuminate\Support\Facades\DB;
  *   - no-bought needs a price, and `products` has no price column at all; the
  *     only price on a product lives in its `variants` JSON.
  *
+ * Total, bought and never-bought products all run over the same product
+ * universe (see `productScope`), exactly the set the Total Products card counts,
+ * split by whether a sale line ever touched the product. That is what makes
+ * `total = bought + no-bought` hold even for quick-added products that have no
+ * package or category, which the earlier category-chain joins silently dropped.
+ *
  * Every query here is scoped exactly like the card it backs, so the row count
  * on the table agrees with the number on the card. Where a card filters in PHP
  * (in-stock, low-stock) the table does the same, because the available stock of
@@ -38,13 +44,10 @@ trait DashboardTableQueries
         int $userId,
         int $page = 1,
         int $perPage = 15,
-        ?string $search = null,
     ): LengthAwarePaginator {
         $query = $this->scopedProductsQuery($shopId, $userId)
             ->with('package.category', 'createdByUser')
             ->orderByDesc('products.created_at');
-
-        $this->applyNameSearch($query, $search);
 
         $paginator = $query->paginate($perPage, ['products.*'], 'page', $page);
 
@@ -75,7 +78,6 @@ trait DashboardTableQueries
         int $page = 1,
         int $perPage = 15,
         bool $lowOnly = false,
-        ?string $search = null,
     ): LengthAwarePaginator {
         $products = $this->scopedProducts($shopId, $userId)
             ->load('package.category')
@@ -84,7 +86,6 @@ trait DashboardTableQueries
 
                 return $stock > 0 && (!$lowOnly || $stock <= self::LOW_STOCK_THRESHOLD);
             })
-            ->filter(fn (Product $product) => $this->matchesName($product->name, $search))
             ->values();
 
         $rows = $products->flatMap(fn (Product $product) => $this->stockRowsFor($product))->values();
@@ -92,35 +93,24 @@ trait DashboardTableQueries
         return $this->paginatorFor($rows, $page, $perPage);
     }
 
+    /**
+     * @param  int|null  $month  Filter to one calendar month, as `YYYY-MM`. Null
+     *                           means all time. The month is resolved to a half
+     *                           open range so that the last day of the month
+     *                           is included without depending on whether
+     *                           `created_at` has a time component.
+     */
     public function paginateSalesTable(
         int $shopId,
         int $page = 1,
         int $perPage = 15,
-        ?string $search = null,
-        ?string $from = null,
-        ?string $to = null,
+        ?string $month = null,
     ): LengthAwarePaginator {
         $query = Sale::with('saleItems')
             ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
             ->orderByDesc('sales.created_at');
 
-        if ($search !== null && $search !== '') {
-            $like = '%' . $search . '%';
-            $query->where(function ($q) use ($like) {
-                $q->where('voucher_no', 'like', $like)
-                    ->orWhere('product_name', 'like', $like)
-                    ->orWhere('user_name', 'like', $like)
-                    ->orWhere('customer_name', 'like', $like);
-            });
-        }
-
-        if ($from !== null && $from !== '') {
-            $query->whereDate('sales.created_at', '>=', Carbon::parse($from)->startOfDay());
-        }
-
-        if ($to !== null && $to !== '') {
-            $query->whereDate('sales.created_at', '<=', Carbon::parse($to)->endOfDay());
-        }
+        $this->applyMonthFilter($query, $month);
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -149,26 +139,26 @@ trait DashboardTableQueries
     }
 
     /**
-     * $direction 'desc' is most bought, 'asc' is least bought. Both cards read
-     * the same 30-day window, so both tables do too unless days says otherwise.
+     * $direction 'desc' is most bought, 'asc' is least bought. Membership is
+     * "ever has a sale line", which is the half of the product universe that
+     * the Total Products card counts, so that bought + no-bought always add up
+     * to total. The dashboard cards that promote this table still fold a 30-day
+     * window into their ordering; the table itself is all-time to keep the
+     * three totals reconcilable in the "View all" screens.
      */
     public function paginateBoughtProductsTable(
         int $shopId,
+        int $userId,
         int $page = 1,
         int $perPage = 15,
         string $direction = 'desc',
-        int $days = 30,
-        ?string $search = null,
     ): LengthAwarePaginator {
         $order = $direction === 'asc' ? 'asc' : 'desc';
 
         $query = DB::table('sale_items')
             ->join('products', 'sale_items.product_id', '=', 'products.id')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
-            ->where('inventories.shop_id', $shopId)
-            ->where('sale_items.created_at', '>=', Carbon::now()->subDays($days))
+            ->where('products.active', true)
+            ->where($this->productScope($shopId, $userId))
             ->select(
                 'products.id as product_id',
                 'products.name as product_name',
@@ -185,8 +175,6 @@ trait DashboardTableQueries
             )
             ->groupBy('products.id', 'products.name')
             ->orderBy('bought_stock', $order);
-
-        $this->applyNameSearch($query, $search, 'products.name');
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -207,17 +195,14 @@ trait DashboardTableQueries
      */
     public function paginateNoBoughtProductsTable(
         int $shopId,
+        int $userId,
         int $page = 1,
         int $perPage = 15,
-        ?string $search = null,
     ): LengthAwarePaginator {
         $query = DB::table('products')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
             ->leftJoin('users', 'products.created_by', '=', 'users.id')
             ->where('products.active', true)
-            ->where('inventories.shop_id', $shopId)
+            ->where($this->productScope($shopId, $userId))
             ->whereNotExists(function ($q) {
                 $q->select(DB::raw(1))
                     ->from('sale_items')
@@ -231,8 +216,6 @@ trait DashboardTableQueries
                 'users.name as creator_name',
             )
             ->orderByDesc('products.created_at');
-
-        $this->applyNameSearch($query, $search, 'products.name');
 
         $paginator = $query->paginate($perPage, ['*'], 'page', $page);
 
@@ -306,21 +289,23 @@ trait DashboardTableQueries
         return (int) round((float) ($decoded[0]['price'] ?? 0));
     }
 
-    private function applyNameSearch($query, ?string $search, string $column = 'products.name'): void
+    /**
+     * Restricts a query to a single calendar month given as `YYYY-MM`.
+     *
+     * Anything unparseable is ignored rather than throwing, because the value
+     * arrives straight from the query string. `>=` the first instant of the
+     * month and `<` the first instant of the next one keeps the filter index
+     * friendly and includes the whole final day whatever its time component is.
+     */
+    private function applyMonthFilter($query, ?string $month): void
     {
-        if ($search === null || $search === '') {
+        if ($month === null || ! preg_match('/^(\d{4})-(\d{2})$/', trim($month), $matches)) {
             return;
         }
 
-        $query->where($column, 'like', '%' . $search . '%');
-    }
+        $start = Carbon::create((int) $matches[1], (int) $matches[2], 1)->startOfMonth();
+        $end = $start->copy()->addMonthNoOverflow();
 
-    private function matchesName(string $name, ?string $search): bool
-    {
-        if ($search === null || $search === '') {
-            return true;
-        }
-
-        return str_contains(mb_strtolower($name), mb_strtolower($search));
+        $query->where('created_at', '>=', $start)->where('created_at', '<', $end);
     }
 }

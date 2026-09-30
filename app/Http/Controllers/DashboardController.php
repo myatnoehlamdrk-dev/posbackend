@@ -95,6 +95,10 @@ class DashboardController extends Controller
      * The six tables behind the dashboard "View all" links. Each one is scoped
      * the same way as the card that opens it, so the row count agrees with the
      * number on the card.
+     *
+     * Every table is paginated in SQL and the client walks it one page at a time
+     * as the user scrolls, so the page size is clamped to keep one response a
+     * reasonable size.
      */
     public function productsTable(Request $request): JsonResponse
     {
@@ -110,7 +114,6 @@ class DashboardController extends Controller
                 $user->id,
                 $this->page($request),
                 $this->perPage($request),
-                $request->input('search'),
             )
         );
     }
@@ -132,7 +135,6 @@ class DashboardController extends Controller
                 $this->page($request),
                 $this->perPage($request),
                 $lowOnly,
-                $request->input('search'),
             )
         );
     }
@@ -145,14 +147,16 @@ class DashboardController extends Controller
             return $this->emptyTable();
         }
 
+        $data = $request->validate([
+            'month' => ['nullable', 'string', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+        ]);
+
         return $this->tableResponse(
             $this->dashboardService->paginateSalesTable(
                 $user->shop_id,
                 $this->page($request),
                 $this->perPage($request),
-                $request->input('search'),
-                $request->input('from'),
-                $request->input('to'),
+                $data['month'] ?? null,
             )
         );
     }
@@ -168,11 +172,10 @@ class DashboardController extends Controller
         return $this->tableResponse(
             $this->dashboardService->paginateBoughtProductsTable(
                 $user->shop_id,
+                $user->id,
                 $this->page($request),
                 $this->perPage($request),
                 $request->input('direction', 'desc'),
-                $request->integer('days', 30),
-                $request->input('search'),
             )
         );
     }
@@ -188,9 +191,9 @@ class DashboardController extends Controller
         return $this->tableResponse(
             $this->dashboardService->paginateNoBoughtProductsTable(
                 $user->shop_id,
+                $user->id,
                 $this->page($request),
                 $this->perPage($request),
-                $request->input('search'),
             )
         );
     }
@@ -205,9 +208,25 @@ class DashboardController extends Controller
         return min(100, max(5, $request->integer('per_page', 15)));
     }
 
+    /**
+     * Serves a "View all" table as `{ data, meta }`. LengthAwarePaginator
+     * serializes flat by default, and the rest of the app historically returns
+     * either this shape or a flat one, but the dashboard client reads `meta`,
+     * so the paginator is re-wrapped here to keep the contract in one place.
+     */
     private function tableResponse(LengthAwarePaginator $paginator): JsonResponse
     {
-        return response()->json($paginator);
+        return response()->json([
+            'data' => $paginator->items(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+        ]);
     }
 
     private function emptyTable(): JsonResponse
