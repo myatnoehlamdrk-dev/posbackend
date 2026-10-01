@@ -27,6 +27,22 @@ interface DashboardRepositoryInterface
     public function getLeastProducts(int $shopId, int $limit = 3): array;
     public function getNoBoughtProducts(int $shopId, int $userId, int $limit = 3): array;
 
+    // Catalog, stock-tier and cart/sales summaries that back the extra rows of
+    // KPI cards on the dashboard.
+    public function getTotalCategories(int $shopId, int $userId): int;
+    public function getTotalPackages(int $shopId, int $userId): int;
+    public function getBrandCount(int $shopId, int $userId): int;
+    public function getCategorylessProductCount(int $shopId, int $userId): int;
+
+    /** @return array{high:int,mid:int,low:int,out:int} */
+    public function getStockTierCounts(int $shopId, int $userId): array;
+
+    public function getInCartCount(int $shopId): int;
+    public function getSalesCount(int $shopId): int;
+
+    /** @return array{avg_total:int,avg_products:int} */
+    public function getRecentSalesAverages(int $shopId, int $limit = 10): array;
+
     // Row-level tables behind the dashboard "View all" links. All of these are
     // server-paginated; the client never asks for more than one page at a time.
     public function paginateProductsTable(int $shopId, int $userId, int $page = 1, int $perPage = 15): LengthAwarePaginator;

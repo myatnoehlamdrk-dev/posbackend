@@ -50,6 +50,9 @@ use App\Services\SaleService;
 use App\Services\StockAlertService;
 use App\Services\SupplierService;
 use App\Services\UserResolutionService;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -96,6 +99,37 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        //
+        $this->configureRateLimiters();
+    }
+
+    /**
+     * Named rate limiters, referenced from the route middleware.
+     *
+     * The numbers are deliberately asymmetric. Reads get a wide window because
+     * opening a screen legitimately fans out several GETs at once and a till
+     * sitting idle still polls; auth gets a tight one because that is the only
+     * group where the traffic pattern itself is the attack.
+     *
+     * Both limiters emit Laravel's standard `Retry-After` header on 429, which
+     * the Flutter client parses for `TooManyRequestsException.retryAfterSeconds`
+     * and for the retry delay. Nothing custom is needed on either side.
+     */
+    protected function configureRateLimiters(): void
+    {
+        // Authenticated traffic, keyed by user when there is a session and by
+        // IP when there is not. Keying on the user stops one till behind a
+        // shared shop NAT from consuming another's quota.
+        RateLimiter::for('api', function (Request $request) {
+            $user = $request->user();
+
+            return Limit::perMinute(120)->by($user?->id ?: $request->ip());
+        });
+
+        // Credential endpoints: login, register, OTP send and verify, password
+        // reset. Tight, and keyed on IP alone because there is no user yet --
+        // which is precisely why this is the group worth throttling.
+        RateLimiter::for('auth', function (Request $request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
     }
 }

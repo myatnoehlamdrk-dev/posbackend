@@ -22,6 +22,13 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
      */
     private const LOW_STOCK_THRESHOLD = 5;
 
+    /**
+     * Upper bound of the "mid" stock tier. Above this a product is "high"
+     * stock. Low/out reuse `LOW_STOCK_THRESHOLD` so the tier counts agree with
+     * the existing Low Stock card.
+     */
+    private const MID_STOCK_THRESHOLD = 20;
+
     public function getTodaySales(int $shopId, Carbon $today): array
     {
         $result = Sale::where('created_at', '>=', $today)
@@ -238,6 +245,101 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             ->limit($limit)
             ->get()
             ->toArray();
+    }
+
+    public function getTotalCategories(int $shopId, int $userId): int
+    {
+        return DB::table('categories')
+            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+            ->where('categories.active', true)
+            ->where(function ($q) use ($shopId, $userId) {
+                $q->where('inventories.shop_id', $shopId)
+                  ->orWhere('categories.user_id', $userId);
+            })
+            ->count();
+    }
+
+    public function getTotalPackages(int $shopId, int $userId): int
+    {
+        return DB::table('packages')
+            ->join('categories', 'packages.category_id', '=', 'categories.id')
+            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+            ->where('packages.active', true)
+            ->where(function ($q) use ($shopId, $userId) {
+                $q->where('inventories.shop_id', $shopId)
+                  ->orWhere('categories.user_id', $userId);
+            })
+            ->count();
+    }
+
+    public function getBrandCount(int $shopId, int $userId): int
+    {
+        return $this->scopedProductsQuery($shopId, $userId)
+            ->whereNotNull('products.brand')
+            ->where('products.brand', '!=', '')
+            ->distinct()
+            ->count('products.brand');
+    }
+
+    public function getCategorylessProductCount(int $shopId, int $userId): int
+    {
+        return $this->scopedProductsQuery($shopId, $userId)
+            ->whereNull('products.package_id')
+            ->count();
+    }
+
+    public function getStockTierCounts(int $shopId, int $userId): array
+    {
+        $tiers = ['high' => 0, 'mid' => 0, 'low' => 0, 'out' => 0];
+
+        foreach ($this->scopedProducts($shopId, $userId) as $product) {
+            $stock = $product->getAvailableStock();
+            if ($stock <= 0) {
+                $tiers['out']++;
+            } elseif ($stock <= self::LOW_STOCK_THRESHOLD) {
+                $tiers['low']++;
+            } elseif ($stock <= self::MID_STOCK_THRESHOLD) {
+                $tiers['mid']++;
+            } else {
+                $tiers['high']++;
+            }
+        }
+
+        return $tiers;
+    }
+
+    /**
+     * "In Cart" counts the open (draft) orders a shop's users have in their
+     * cart — one per cart card, matching what the Add to Cart screen lists.
+     */
+    public function getInCartCount(int $shopId): int
+    {
+        return Order::where('status', 'draft')
+            ->whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->count();
+    }
+
+    public function getSalesCount(int $shopId): int
+    {
+        return Sale::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))->count();
+    }
+
+    public function getRecentSalesAverages(int $shopId, int $limit = 10): array
+    {
+        $sales = Sale::whereHas('user', fn ($q) => $q->where('shop_id', $shopId))
+            ->withCount('saleItems')
+            ->latest()
+            ->limit($limit)
+            ->get();
+
+        if ($sales->isEmpty()) {
+            return ['avg_total' => 0, 'avg_products' => 0];
+        }
+
+        return [
+            'avg_total' => (int) round((float) $sales->avg('grand_total')),
+            'avg_products' => (int) round((float) $sales->avg('sale_items_count')),
+        ];
     }
 
     public function getSalesYears(int $shopId): array
