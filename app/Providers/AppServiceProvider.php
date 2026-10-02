@@ -131,5 +131,25 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('auth', function (Request $request) {
             return Limit::perMinute(10)->by($request->ip());
         });
+
+        // Login, keyed by the account being tried as well as the caller's IP.
+        //
+        // `throttle:login` has no meaning until a limiter with that name is
+        // registered here -- Laravel resolves `throttle:<name>` against these
+        // definitions and throws on an unknown one, so the middleware name is
+        // not a built-in you can just apply.
+        //
+        // The `auth` limiter above counts attempts per IP, which an attacker
+        // rotates for free, so on its own it bounds the *speed* of a guessing
+        // run without bounding its length. Keying on the email as well means
+        // distributing the run across hundreds of hosts still burns down the
+        // per-account budget that locks the account. Per-minute throttling is
+        // not lockout either: five guesses an hour, forever, is 120 a day.
+        RateLimiter::for('login', function (Request $request) {
+            $key = strtolower((string) $request->input('email'));
+
+            return Limit::perMinute((int) config('security.login.per_minute'))
+                ->by($key . '|' . $request->ip());
+        });
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UserRole;
 use App\Http\Requests\ApproveUserRequest;
 use App\Http\Resources\ShopResource;
 use App\Http\Resources\UserResource;
@@ -10,6 +11,8 @@ use App\Models\User;
 use App\Services\AdminDashboardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
@@ -166,13 +169,71 @@ class AdminController extends Controller
 
     public function toggleUserActive(User $user): JsonResponse
     {
-        $user->update(['active_status' => ! $user->active_status]);
+        $becomingActive = ! $user->active_status;
+
+        $user->update(['active_status' => $becomingActive]);
+
+        // Deactivating has to end the sessions, not just block the next login.
+        // Tokens are independent of `active_status`, so flipping the flag on
+        // its own leaves a dismissed cashier signed in until the token happens
+        // to expire -- which, before tokens carried an expiry, was never.
+        if (! $becomingActive) {
+            $user->tokens()->delete();
+        }
 
         return response()->json(UserResource::make($user->fresh()->load('shop'))->resolve(request()));
     }
 
+    /**
+     * Revoke every session belonging to a user, on request.
+     *
+     * The counterpart to a lost handset: the account is fine, the device is
+     * not, and the token has to die without touching the user's access.
+     */
+    public function revokeUserSessions(User $user): JsonResponse
+    {
+        $revoked = $user->tokens()->delete();
+
+        return response()->json([
+            'message' => 'Revoked all active sessions for this user.',
+            'revoked' => $revoked,
+        ]);
+    }
+
+    public function updateUserRole(Request $request, User $user): JsonResponse
+    {
+        $data = $request->validate([
+            'role' => ['required', Rule::enum(UserRole::class)],
+        ]);
+
+        $role = UserRole::from($data['role']);
+
+        // Demoting an admin who is making the request would lock them out of
+        // the very screen they are standing on, and an account that can strip
+        // its own admin role is a lateral-movement path. Refuse it and let
+        // them hand the role to someone else first.
+        if ($role !== UserRole::ADMIN && $request->user()->id === $user->id) {
+            throw ValidationException::withMessages([
+                'role' => ['You cannot remove your own admin access. Ask another admin to do it.'],
+            ]);
+        }
+
+        $user->update(['role' => $role->value]);
+
+        // Permissions changed, so every session issued under the old role is
+        // now carrying the wrong authority. Re-issue is the user's job; the
+        // safe default is to end them all.
+        $user->tokens()->delete();
+
+        return response()->json([
+            'message' => 'Role updated. All sessions for this user were revoked.',
+            'user' => UserResource::make($user->fresh()->load('shop'))->resolve($request),
+        ]);
+    }
+
     public function destroyUser(User $user): JsonResponse
     {
+        $user->tokens()->delete();
         $user->delete();
 
         return $this->deleted();

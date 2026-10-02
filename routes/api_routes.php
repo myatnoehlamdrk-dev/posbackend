@@ -35,7 +35,12 @@ if (! function_exists('pos_define_api_routes')) {
     // which is what the Flutter client parses before retrying.
     Route::middleware('throttle:auth')->prefix('auth')->group(function () {
         Route::post('/register', [App\Http\Controllers\AuthController::class, 'register']);
-        Route::post('/login', [App\Http\Controllers\AuthController::class, 'login']);
+        // Tightened on top of `throttle:auth` because that limiter is keyed by
+        // IP, and IP is the one thing an attacker controls most cheaply. This
+        // one is keyed by the email being tried as well, so distributing a
+        // guessing run across many hosts still exhausts the per-account budget
+        // that `security.login.max_attempts` locks on.
+        Route::middleware('throttle:login')->post('/login', [App\Http\Controllers\AuthController::class, 'login']);
 
         Route::post('/register/send-otp', [App\Http\Controllers\PasswordResetController::class, 'registerSendOtp']);
         Route::post('/register/verify-otp', [App\Http\Controllers\PasswordResetController::class, 'registerVerifyOtp']);
@@ -46,14 +51,18 @@ if (! function_exists('pos_define_api_routes')) {
 
         Route::middleware('auth:sanctum')->group(function () {
             Route::post('/logout', [App\Http\Controllers\AuthController::class, 'logout']);
+            // Ends every session for this user, not just the one calling it.
+            Route::post('/logout-all', [App\Http\Controllers\AuthController::class, 'logoutAll']);
+            // Which devices are currently signed in. `name` is the device label
+            // supplied at login, so this is the "which till is live right now"
+            // query without a second table to keep in sync.
+            Route::get('/sessions', [App\Http\Controllers\AuthController::class, 'sessions']);
             Route::get('/me', [App\Http\Controllers\AuthController::class, 'me']);
             Route::get('/profile', [App\Http\Controllers\ProfileController::class, 'show']);
             Route::put('/profile', [App\Http\Controllers\ProfileController::class, 'update']);
             Route::put('/profile/password', [App\Http\Controllers\ProfileController::class, 'changePassword']);
         });
     });
-
-    Route::apiResource('suppliers', App\Http\Controllers\SupplierController::class);
 
     // Public: let unauthenticated users search existing shops before registering.
     // Array syntax, not `Route::get($uri, Controller::class, 'method')` -- the
@@ -63,6 +72,11 @@ if (! function_exists('pos_define_api_routes')) {
     Route::get('shops', [App\Http\Controllers\ShopController::class, 'index']);
 
     Route::middleware('auth:sanctum')->group(function () {
+        // Suppliers moved inside this group. It was declared above the group
+        // and so inherited no middleware at all, which left the full CRUD
+        // resource -- read, update, delete -- open to anyone who knew the URL.
+        Route::apiResource('suppliers', App\Http\Controllers\SupplierController::class);
+
         Route::apiResource('shops', App\Http\Controllers\ShopController::class)->except(['index']);
         Route::patch('shops/{shop}', [App\Http\Controllers\ShopController::class, 'update']);
 
@@ -151,9 +165,17 @@ if (! function_exists('pos_define_api_routes')) {
         Route::get('/users/pending', [App\Http\Controllers\AdminController::class, 'pendingUsers']);
         Route::put('/users/{user}/approve', [App\Http\Controllers\AdminController::class, 'approveUser']);
         Route::put('/users/{user}/toggle-active', [App\Http\Controllers\AdminController::class, 'toggleUserActive']);
+        Route::put('/users/{user}/role', [App\Http\Controllers\AdminController::class, 'updateUserRole']);
+        // Ends a user's sessions without touching the account -- the lost
+        // handset case, where revoking access would be the wrong remedy.
+        Route::delete('/users/{user}/sessions', [App\Http\Controllers\AdminController::class, 'revokeUserSessions']);
         Route::delete('/users/{user}', [App\Http\Controllers\AdminController::class, 'destroyUser']);
     });
 
-    Route::post('images', [App\Http\Controllers\ImageController::class, 'store']);
+    // Moved inside `auth:sanctum`. It used to sit at the end of the file,
+    // outside every group, so anyone who knew the URL could spend the shop's
+    // ImgBB quota and push arbitrary files through the store's account.
+    Route::middleware('auth:sanctum')
+        ->post('images', [App\Http\Controllers\ImageController::class, 'store']);
     }
 }

@@ -188,7 +188,7 @@ class PasswordResetController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email'],
             'reset_token' => ['required', 'string'],
-            'password' => ['required', 'string', 'min:6', 'confirmed'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
         $resetToken = DB::table('password_reset_tokens')
@@ -224,6 +224,12 @@ class PasswordResetController extends Controller
         $user->update([
             'password' => Hash::make($data['password']),
         ]);
+
+        // The whole point of a reset is that the owner no longer trusts the
+        // old credential, so any session opened with it has to be destroyed
+        // too. Without this an attacker who got in first simply waits out the
+        // reset and stays signed in on a token nothing ever invalidated.
+        $user->tokens()->delete();
 
         DB::table('password_reset_tokens')
             ->where('email', $data['email'])

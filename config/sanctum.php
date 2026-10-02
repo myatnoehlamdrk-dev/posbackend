@@ -45,12 +45,21 @@ return [
     |--------------------------------------------------------------------------
     |
     | This value controls the number of minutes until an issued token will be
-    | considered expired. This will override any values set in the token's
-    | "expires_at" attribute, but first-party sessions are not affected.
+    | considered expired, and it applies to every Sanctum token this app
+    | issues. It was null, which made a leaked token valid forever from any
+    | machine, and no amount of client-side cleanup could take it back.
+    |
+    | Note on precedence: Sanctum treats this and a token's own "expires_at" as
+    | two independent conditions that must *both* hold (see the guard in
+    | vendor/laravel/sanctum/src/Guard.php), so setting this does not cancel a
+    | shorter per-token expiry -- the effective lifetime is the shorter of the
+    | two. `security.token_ttl_minutes` is deliberately the smaller of the pair.
+    |
+    | 1440 is a backstop, not the intended session length.
     |
     */
 
-    'expiration' => null,
+    'expiration' => 1440,
 
     /*
     |--------------------------------------------------------------------------

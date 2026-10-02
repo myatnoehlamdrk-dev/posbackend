@@ -32,6 +32,10 @@ class User extends Authenticatable
         'gender',
         'active_status',
         'is_verified',
+        'failed_attempts',
+        'locked_until',
+        'last_login_at',
+        'last_login_ip',
     ];
 
     protected $hidden = [
@@ -47,11 +51,30 @@ class User extends Authenticatable
             'date_of_birth' => 'date',
             'active_status' => 'boolean',
             'is_verified' => 'boolean',
+            'failed_attempts' => 'integer',
+            'locked_until' => 'datetime',
+            'last_login_at' => 'datetime',
         ];
     }
 
     public function shop(): BelongsTo
     {
         return $this->belongsTo(Shop::class);
+    }
+
+    /** True while a credential-stuffing lockout is still in force. */
+    public function isLockedOut(): bool
+    {
+        return $this->locked_until !== null && $this->locked_until->isFuture();
+    }
+
+    /** Minutes remaining on the lockout, rounded up. Zero when not locked. */
+    public function lockoutMinutesRemaining(): int
+    {
+        if (! $this->isLockedOut()) {
+            return 0;
+        }
+
+        return (int) ceil(now()->diffInMinutes($this->locked_until, false));
     }
 }
