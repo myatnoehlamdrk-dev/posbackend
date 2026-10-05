@@ -7,24 +7,24 @@ use App\Http\Resources\UserResource;
 use App\Mail\OtpMail;
 use App\Models\User;
 use App\Services\LoginAttemptService;
+use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
     public function __construct(
         protected LoginAttemptService $loginAttempts,
+        protected OtpService $otp,
     ) {}
     public function register(Request $request): JsonResponse
     {
         $data = $request->validate([
             'fullName' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8'],
+            'password' => ['required', 'string', 'min:6'],
             'phone' => ['nullable', 'string'],
             'social' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
@@ -56,18 +56,15 @@ class AuthController extends Controller
             'is_verified' => false,
         ]);
 
-        // Send verification OTP via email
-        $otp = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $data['email']],
-            [
-                'token' => $otp,
-                'created_at' => now(),
-            ]
+        // Verification code, stored in its own table and confirmed by
+        // EmailVerificationController. Previously written to
+        // `password_reset_tokens` alongside password-reset codes, so the two
+        // flows for one address overwrote each other.
+        $this->otp->send(
+            $user->email,
+            OtpService::VERIFICATION_TABLE,
+            new OtpMail(OtpMail::PURPOSE_VERIFICATION),
         );
-
-        Mail::to($data['email'])->send(new OtpMail($otp));
 
         return response()->json([
             'message' => 'Registration successful. Please verify your email.',

@@ -4,105 +4,30 @@ namespace App\Http\Controllers;
 
 use App\Mail\OtpMail;
 use App\Models\User;
+use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Password reset: prove the mailbox, then set a new password.
+ *
+ * Three endpoints, two credentials. The OTP proves the requester can read mail
+ * at the address on file; it is then exchanged for a longer-lived handoff
+ * token, which is what actually authorises the change. Splitting those two
+ * apart means the password is never changed on the strength of a six-digit code
+ * that sits unread in an inbox.
+ *
+ * Registration verification used to live here too and now has its own
+ * controller, along with its own table. The client contract for these three
+ * endpoints is unchanged.
+ */
 class PasswordResetController extends Controller
 {
-    public function registerSendOtp(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-        ]);
-
-        $user = User::where('email', $data['email'])->first();
-
-        if (! $user) {
-            throw ValidationException::withMessages([
-                'email' => ['No account found with this email address.'],
-            ]);
-        }
-
-        if ($user->is_verified) {
-            return response()->json([
-                'message' => 'Account is already verified. Please login.',
-            ]);
-        }
-
-        $otp = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $data['email']],
-            [
-                'token' => $otp,
-                'created_at' => now(),
-            ]
-        );
-
-        Mail::to($data['email'])->send(new OtpMail($otp));
-
-        return response()->json([
-            'message' => 'Verification OTP has been sent to your email.',
-        ]);
-    }
-
-    public function registerVerifyOtp(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'email' => ['required', 'email'],
-            'otp' => ['required', 'string', 'size:6'],
-        ]);
-
-        $resetToken = DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
-            ->first();
-
-        if (! $resetToken) {
-            throw ValidationException::withMessages([
-                'otp' => ['No OTP request found for this email.'],
-            ]);
-        }
-
-        if ($resetToken->token !== $data['otp']) {
-            throw ValidationException::withMessages([
-                'otp' => ['The OTP is incorrect.'],
-            ]);
-        }
-
-        $createdAt = \Carbon\Carbon::parse($resetToken->created_at);
-        if ($createdAt->diffInMinutes(now()) > 10) {
-            DB::table('password_reset_tokens')
-                ->where('email', $data['email'])
-                ->delete();
-
-            throw ValidationException::withMessages([
-                'otp' => ['The OTP has expired. Please request a new one.'],
-            ]);
-        }
-
-        $user = User::where('email', $data['email'])->first();
-
-        if (! $user) {
-            throw ValidationException::withMessages([
-                'email' => ['No account found with this email.'],
-            ]);
-        }
-
-        $user->update(['is_verified' => true]);
-
-        DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
-            ->delete();
-
-        return response()->json([
-            'message' => 'Email verified successfully. You can now login.',
-        ]);
-    }
+    public function __construct(
+        private readonly OtpService $otp,
+    ) {}
 
     public function sendOtp(Request $request): JsonResponse
     {
@@ -118,24 +43,26 @@ class PasswordResetController extends Controller
             ]);
         }
 
-        $otp = str_pad(random_int(100000, 999999), 6, '0', STR_PAD_LEFT);
-
-        DB::table('password_reset_tokens')->updateOrInsert(
-            ['email' => $data['email']],
-            [
-                'token' => $otp,
-                'created_at' => now(),
-            ]
+        $this->otp->send(
+            $user->email,
+            OtpService::RESET_TABLE,
+            new OtpMail(OtpMail::PURPOSE_RESET),
         );
-
-        // Send OTP via Resend email
-        Mail::to($data['email'])->send(new OtpMail($otp));
 
         return response()->json([
             'message' => 'OTP has been sent to your email.',
         ]);
     }
 
+    /**
+     * Trade a proven OTP for the token `resetPassword()` requires.
+     *
+     * `exchangeForResetToken()` spends the OTP as it issues the token, so the
+     * code cannot be replayed for a second one. The token comes back in the
+     * response rather than being stored server-side for the client to echo
+     * later, which is what lets it stay a bearer secret with no session
+     * attached.
+     */
     public function verifyOtp(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -143,46 +70,27 @@ class PasswordResetController extends Controller
             'otp' => ['required', 'string', 'size:6'],
         ]);
 
-        $resetToken = DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
-            ->first();
+        $this->otp->verify(
+            $data['email'],
+            $data['otp'],
+            OtpService::RESET_TABLE,
+        );
 
-        if (! $resetToken) {
-            throw ValidationException::withMessages([
-                'otp' => ['No OTP request found for this email.'],
-            ]);
-        }
-
-        if ($resetToken->token !== $data['otp']) {
-            throw ValidationException::withMessages([
-                'otp' => ['The OTP is incorrect.'],
-            ]);
-        }
-
-        $createdAt = \Carbon\Carbon::parse($resetToken->created_at);
-        if ($createdAt->diffInMinutes(now()) > 10) {
-            DB::table('password_reset_tokens')
-                ->where('email', $data['email'])
-                ->delete();
-
-            throw ValidationException::withMessages([
-                'otp' => ['The OTP has expired. Please request a new one.'],
-            ]);
-        }
-
-        // Generate a reset token for password change
-        $resetTokenValue = Str::random(64);
-
-        DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
-            ->update(['token' => $resetTokenValue, 'created_at' => now()]);
+        $resetToken = $this->otp->exchangeForResetToken($data['email']);
 
         return response()->json([
             'message' => 'OTP verified successfully.',
-            'reset_token' => $resetTokenValue,
+            'reset_token' => $resetToken,
         ]);
     }
 
+    /**
+     * Set the new password.
+     *
+     * `confirmed` in the rules requires the client to send `password_confirmation`
+     * as well; a mistyped password that then fails on the next login costs a
+     * cashier their session and a support call.
+     */
     public function resetPassword(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -191,27 +99,7 @@ class PasswordResetController extends Controller
             'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        $resetToken = DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
-            ->where('token', $data['reset_token'])
-            ->first();
-
-        if (! $resetToken) {
-            throw ValidationException::withMessages([
-                'reset_token' => ['Invalid or expired reset token.'],
-            ]);
-        }
-
-        $createdAt = \Carbon\Carbon::parse($resetToken->created_at);
-        if ($createdAt->diffInMinutes(now()) > 30) {
-            DB::table('password_reset_tokens')
-                ->where('email', $data['email'])
-                ->delete();
-
-            throw ValidationException::withMessages([
-                'reset_token' => ['Reset token has expired. Please start over.'],
-            ]);
-        }
+        $this->otp->assertResetTokenValid($data['email'], $data['reset_token']);
 
         $user = User::where('email', $data['email'])->first();
 
@@ -231,9 +119,7 @@ class PasswordResetController extends Controller
         // reset and stays signed in on a token nothing ever invalidated.
         $user->tokens()->delete();
 
-        DB::table('password_reset_tokens')
-            ->where('email', $data['email'])
-            ->delete();
+        $this->otp->forget($data['email'], OtpService::RESET_TABLE);
 
         return response()->json([
             'message' => 'Password has been reset successfully.',

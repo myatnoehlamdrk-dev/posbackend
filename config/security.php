@@ -45,4 +45,36 @@ return [
 
     'token_ttl_minutes' => env('API_TOKEN_TTL_MINUTES', 720),
 
+    /*
+    |--------------------------------------------------------------------------
+    | One-Time Codes
+    |--------------------------------------------------------------------------
+    |
+    | Both the registration-verification code and the password-reset code are
+    | 6 digits, mailed to the address on file. They live in separate tables now
+    | (see the email_verification_tokens migration) but expire under the same
+    | rule, so one setting covers both. Ten minutes is short enough that a
+    | code left in an inbox is worthless by the time anyone reads it.
+    |
+    */
+
+    'otp' => [
+        'ttl_minutes' => env('OTP_TTL_MINUTES', 10),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Password Reset Handoff Token
+    |--------------------------------------------------------------------------
+    |
+    | Longer than the OTP by design, and deliberately not a continuation of it.
+    | Verifying the code mints a fresh 64-character token and restarts the
+    | clock, so the OTP's ten minutes do not eat into the window in which the
+    | reset can actually be completed. Thirty minutes is the shortest that
+    | survives typing a new password on a phone keyboard.
+    |
+    */
+
+    'reset_token_ttl_minutes' => env('RESET_TOKEN_TTL_MINUTES', 30),
+
 ];

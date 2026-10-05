@@ -42,8 +42,12 @@ if (! function_exists('pos_define_api_routes')) {
         // that `security.login.max_attempts` locks on.
         Route::middleware('throttle:login')->post('/login', [App\Http\Controllers\AuthController::class, 'login']);
 
-        Route::post('/register/send-otp', [App\Http\Controllers\PasswordResetController::class, 'registerSendOtp']);
-        Route::post('/register/verify-otp', [App\Http\Controllers\PasswordResetController::class, 'registerVerifyOtp']);
+        // Registration verification, on its own controller and its own table.
+        // These two used to be PasswordResetController methods, because both
+        // flows shared `password_reset_tokens`; the URIs are unchanged so
+        // installed terminals keep working.
+        Route::post('/register/send-otp', [App\Http\Controllers\EmailVerificationController::class, 'sendOtp']);
+        Route::post('/register/verify-otp', [App\Http\Controllers\EmailVerificationController::class, 'verifyOtp']);
 
         Route::post('/forgot-password/send-otp', [App\Http\Controllers\PasswordResetController::class, 'sendOtp']);
         Route::post('/forgot-password/verify-otp', [App\Http\Controllers\PasswordResetController::class, 'verifyOtp']);
