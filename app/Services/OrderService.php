@@ -5,14 +5,18 @@ namespace App\Services;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Resources\OrderResource;
 use App\Models\Order;
+use App\Models\Product;
 use App\Repositories\Contracts\OrderRepositoryInterface;
 use App\Repositories\Contracts\StockRepositoryInterface;
+use App\Traits\StockOutNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class OrderService
 {
+    use StockOutNotifier;
+
     public function __construct(
         protected OrderRepositoryInterface $orderRepository,
         protected StockRepositoryInterface $stockRepository,
@@ -62,12 +66,20 @@ class OrderService
 
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
+                        $product = Product::find($item['productId']);
+                        $oldStock = $product ? $product->getAvailableStock() : 0;
+
                         $this->stockRepository->deduct(
                             $item['productId'],
                             $item['quantity'],
                             $item['size'] ?? null,
                             $item['color'] ?? null
                         );
+
+                        if ($product) {
+                            $newStock = $product->fresh()->getAvailableStock();
+                            $this->notifyIfStockOut($product, $oldStock, $newStock);
+                        }
                     }
                 }
 
@@ -143,12 +155,20 @@ class OrderService
             $order = DB::transaction(function () use ($data, $order) {
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
+                        $product = Product::find($item['productId']);
+                        $oldStock = $product ? $product->getAvailableStock() : 0;
+
                         $this->stockRepository->deduct(
                             $item['productId'],
                             $item['quantity'],
                             $item['size'] ?? null,
                             $item['color'] ?? null
                         );
+
+                        if ($product) {
+                            $newStock = $product->fresh()->getAvailableStock();
+                            $this->notifyIfStockOut($product, $oldStock, $newStock);
+                        }
                     }
                 }
 

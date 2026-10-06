@@ -9,12 +9,15 @@ use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Repositories\Contracts\SaleRepositoryInterface;
 use App\Repositories\Contracts\StockRepositoryInterface;
+use App\Traits\StockOutNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class SaleService
 {
+    use StockOutNotifier;
+
     public function __construct(
         protected SaleRepositoryInterface $saleRepository,
         protected StockRepositoryInterface $stockRepository,

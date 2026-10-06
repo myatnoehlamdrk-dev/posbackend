@@ -6,11 +6,14 @@ use App\Http\Resources\ProductResource;
 use App\Models\PurchaseItem;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Repositories\Contracts\SupplierRepositoryInterface;
+use App\Traits\StockOutNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProductService
 {
+    use StockOutNotifier;
+
     public function __construct(
         protected ProductRepositoryInterface $productRepository,
         protected SupplierRepositoryInterface $supplierRepository,
@@ -99,6 +102,9 @@ class ProductService
             $stock = collect($variants)->sum('quantity');
         }
 
+        $oldStock = $product->stock ?? 0;
+        $newStock = $stock ?? $product->stock ?? 0;
+
         $supplierId = $this->supplierRepository->resolveOrCreate(
             $data['supplierId'] ?? null,
             $data['supplierName'] ?? null
@@ -113,7 +119,7 @@ class ProductService
             'name' => $data['name'] ?? $product->name,
             'image' => $data['image'] ?? $product->image,
             'image_delete_url' => $data['imageDeleteUrl'] ?? $product->image_delete_url,
-            'stock' => $stock ?? $product->stock,
+            'stock' => $newStock,
             'product_type' => (!empty($updatedVariants) && count($updatedVariants) > 0) ? 'variant' : 'simple',
             'size' => $data['size'] ?? optional(head($variants))['size'] ?? $product->size,
             'brand' => $data['brand'] ?? $product->brand,
@@ -127,6 +133,8 @@ class ProductService
             'package_id' => array_key_exists('packageId', $data) ? $data['packageId'] : $product->package_id,
             'updated_by' => $userId,
         ]);
+
+        $this->notifyIfStockOut($updated, $oldStock, (int) $updated->stock);
 
         return response()->json(new ProductResource($updated));
     }
