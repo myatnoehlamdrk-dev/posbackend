@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\InsufficientStockException;
 use App\Http\Resources\SaleResource;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Repositories\Contracts\SaleRepositoryInterface;
@@ -147,8 +148,9 @@ class SaleService
 
     public function delete(Sale $sale): JsonResponse
     {
-        DB::transaction(function () use ($sale) {
+        $restored = DB::transaction(function () use ($sale) {
             $sale->load('saleItems');
+            $qtyByProduct = [];
             foreach ($sale->saleItems as $saleItem) {
                 if (!empty($saleItem->product_id)) {
                     try {
@@ -158,6 +160,8 @@ class SaleService
                             $saleItem->size ?? null,
                             $saleItem->color ?? null
                         );
+                        $qtyByProduct[$saleItem->product_id] =
+                            ($qtyByProduct[$saleItem->product_id] ?? 0) + (int) $saleItem->quantity;
                     } catch (\Exception $e) {
                         // Product may have been deleted; skip restore
                     }
@@ -165,7 +169,18 @@ class SaleService
             }
 
             $this->saleRepository->delete($sale);
+
+            return ['saleId' => $sale->id, 'qtyByProduct' => $qtyByProduct];
         });
+
+        // Queued after the commit so the push reads the restored stock, not
+        // the pre-commit snapshot; one push per restored product.
+        foreach ($restored['qtyByProduct'] as $productId => $qty) {
+            $product = Product::with('package.category.inventory')->find($productId);
+            if ($product) {
+                $this->notifyStockRestored($product, (int) $qty, "sale_{$restored['saleId']}_{$productId}");
+            }
+        }
 
         return response()->json(null, 204);
     }
@@ -176,7 +191,11 @@ class SaleService
             return response()->json(['message' => 'Sale item does not belong to this sale.'], 400);
         }
 
-        DB::transaction(function () use ($sale, $saleItem) {
+        $itemId = $saleItem->id;
+        $restoredProductId = null;
+        $restoredQty = 0;
+
+        DB::transaction(function () use ($sale, $saleItem, &$restoredProductId, &$restoredQty) {
             if (!empty($saleItem->product_id)) {
                 try {
                     $this->stockRepository->restore(
@@ -185,6 +204,8 @@ class SaleService
                         $saleItem->size ?? null,
                         $saleItem->color ?? null
                     );
+                    $restoredProductId = (int) $saleItem->product_id;
+                    $restoredQty = (int) $saleItem->quantity;
                 } catch (\Exception $e) {
                     // Product may have been deleted; skip restore
                 }
@@ -198,6 +219,13 @@ class SaleService
                 'quantity_sold' => $sale->saleItems->sum('quantity'),
             ]);
         });
+
+        if ($restoredProductId) {
+            $product = Product::with('package.category.inventory')->find($restoredProductId);
+            if ($product) {
+                $this->notifyStockRestored($product, $restoredQty, "item_{$itemId}");
+            }
+        }
 
         return response()->json(new \App\Http\Resources\SaleResource($sale->fresh()->load('saleItems')));
     }

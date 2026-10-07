@@ -85,6 +85,9 @@ class ProductService
 
         $this->linkPurchaseItem($data['purchaseItemId'] ?? null, $product->id);
 
+        // A stocked product landing in a package ends its "empty" stretch.
+        $this->clearRecoveryClaims($product);
+
         return response()->json(new ProductResource($product), 201);
     }
 
@@ -104,6 +107,17 @@ class ProductService
 
         $oldStock = $product->stock ?? 0;
         $newStock = $stock ?? $product->stock ?? 0;
+
+        // Resolved before the update: once package_id changes, a lazy
+        // $product->package would point at the NEW package instead of the
+        // one the product just left (which may now be empty).
+        $leftPackage = null;
+        if (
+            array_key_exists('packageId', $data)
+            && (string) ($data['packageId'] ?? '') !== (string) ($product->package_id ?? '')
+        ) {
+            $leftPackage = $product->package;
+        }
 
         $supplierId = $this->supplierRepository->resolveOrCreate(
             $data['supplierId'] ?? null,
@@ -136,6 +150,15 @@ class ProductService
 
         $this->notifyIfStockOut($updated, $oldStock, (int) $updated->stock);
 
+        if ($leftPackage) {
+            $this->notifyPackageIfEmpty($leftPackage);
+        }
+
+        // Stock raised (or a stocked product joined its package): the
+        // product/package are sellable again, so forget their out-claims
+        // and let the next real emptying push.
+        $this->clearRecoveryClaims($updated);
+
         return response()->json(new ProductResource($updated));
     }
 
@@ -145,7 +168,13 @@ class ProductService
             $this->imgbb->delete($product->image_delete_url);
         }
 
+        $package = $product->package;
+
         $this->productRepository->delete($product);
+
+        if ($package) {
+            $this->notifyPackageIfEmpty($package);
+        }
 
         return response()->json(null, 204);
     }
@@ -153,6 +182,7 @@ class ProductService
     private function mergeIntoExisting(\App\Models\Product $product, array $data, ?int $stock, ?int $supplierId, ?array $variants): void
     {
         $this->productRepository->incrementStock($product, $stock ?? 0);
+        $this->clearRecoveryClaims($product);
 
         if (!empty($supplierId)) {
             $this->productRepository->update($product, [

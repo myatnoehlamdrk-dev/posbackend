@@ -47,6 +47,7 @@ if (! function_exists('pos_define_api_routes')) {
             Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
             Route::put('settings', [App\Http\Controllers\SettingController::class, 'update']);
             Route::apiResource('feedback', App\Http\Controllers\FeedbackController::class)->only(['index', 'store', 'show', 'destroy']);
+            Route::post('notifications/daily-report/check', [App\Http\Controllers\DailyStockReportController::class, 'check']);
             Route::get('customers/analytics', [App\Http\Controllers\CustomerController::class, 'analytics']);
             Route::get('customers/search', [App\Http\Controllers\CustomerController::class, 'search']);
             Route::apiResource('customers', App\Http\Controllers\CustomerController::class);
@@ -75,12 +76,10 @@ if (! function_exists('pos_define_api_routes')) {
             Route::get('/dashboard/top-supplier', [App\Http\Controllers\DashboardController::class, 'topSupplier']);
             Route::get('/dashboard/expiring-stocks', [App\Http\Controllers\DashboardController::class, 'expiringStocks']);
             Route::get('/dashboard/low-stocks', [App\Http\Controllers\DashboardController::class, 'lowStocks']);
-            Route::get('/dashboard/tables/low-stocks', [App\Http\Controllers\DashboardController::class, 'lowStocksTable']);
-            Route::get('/dashboard/tables/expiring-stocks', [App\Http\Controllers\DashboardController::class, 'expiringStocksTable']);
-            Route::get('/dashboard/tables/total-customers', [App\Http\Controllers\DashboardController::class, 'totalCustomersTable']);
-            Route::get('/dashboard/tables/top-products', [App\Http\Controllers\DashboardController::class, 'topProductsTable']);
-            Route::get('/dashboard/tables/recent-sales', [App\Http\Controllers\DashboardController::class, 'recentSalesTable']);
-            Route::get('/dashboard/tables/recent-orders', [App\Http\Controllers\DashboardController::class, 'recentOrdersTable']);
+            Route::get('/dashboard/tables/products', [App\Http\Controllers\DashboardController::class, 'productsTable']);
+            Route::get('/dashboard/tables/stock', [App\Http\Controllers\DashboardController::class, 'stockTable']);
+            Route::get('/dashboard/tables/sales', [App\Http\Controllers\DashboardController::class, 'salesTable']);
+            Route::get('/dashboard/tables/bought-products', [App\Http\Controllers\DashboardController::class, 'boughtProductsTable']);
             Route::get('/dashboard/tables/no-bought-products', [App\Http\Controllers\DashboardController::class, 'noBoughtProductsTable']);
             Route::prefix('fcm-tokens')->group(function () {
                 Route::post('/', [App\Http\Controllers\Api\FcmTokenController::class, 'register']);

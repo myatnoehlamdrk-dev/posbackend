@@ -66,7 +66,7 @@ class OrderService
 
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
-                        $product = Product::find($item['productId']);
+                        $product = Product::with('package.category.inventory')->find($item['productId']);
                         $oldStock = $product ? $product->getAvailableStock() : 0;
 
                         $this->stockRepository->deduct(
@@ -155,7 +155,7 @@ class OrderService
             $order = DB::transaction(function () use ($data, $order) {
                 foreach ($data['items'] as $item) {
                     if (!empty($item['productId'])) {
-                        $product = Product::find($item['productId']);
+                        $product = Product::with('package.category.inventory')->find($item['productId']);
                         $oldStock = $product ? $product->getAvailableStock() : 0;
 
                         $this->stockRepository->deduct(

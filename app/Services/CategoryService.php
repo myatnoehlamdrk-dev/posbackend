@@ -24,9 +24,17 @@ class CategoryService
         $request->validate([
             'inventoryId' => ['sometimes', 'nullable', 'integer'],
             'type' => ['sometimes', 'nullable', Rule::in(['self', 'public'])],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 
-        return response()->json(CategoryResource::collection($this->categoryRepository->listForShop($request)));
+        // Returned through `->response()` rather than wrapped in
+        // `response()->json()`. That wrapper serializes the resource collection
+        // flat -- items only -- because `meta` is added inside
+        // `ResourceCollection::toResponse()`, which it bypasses. The client can
+        // only learn the page count from `meta`, so dropping it is what left
+        // the screen's paginator unable to do anything.
+        return CategoryResource::collection($this->categoryRepository->listForShop($request))->response();
     }
 
     public function withProducts(Request $request): JsonResponse

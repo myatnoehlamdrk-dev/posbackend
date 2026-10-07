@@ -39,6 +39,13 @@ class FcmService
 
     private function getAccessToken(): ?string
     {
+        // FcmService is registered as a singleton, and queue workers live for
+        // hours — credentials read once at boot go stale when the key file is
+        // rotated on disk (every queued send then fails with "Invalid JWT
+        // Signature" while a fresh process succeeds). Re-read per token fetch;
+        // it is a 2KB file and only read when actually sending.
+        $this->loadCredentials();
+
         if (!$this->clientEmail || !$this->privateKey || !$this->projectId) {
             return null;
         }

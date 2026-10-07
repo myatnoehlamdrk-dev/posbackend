@@ -1,0 +1,236 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Models\Inventory;
+use App\Models\Package;
+use App\Models\Product;
+use App\Models\StockAlert;
+use App\Services\FcmService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
+
+/**
+ * Once-a-day shop report: how many products are out of stock, how many are
+ * low stock and which packages have no stocked product left, sent as ONE
+ * push whose payload carries the per-product and per-package lists for the
+ * in-app detail screen.
+ *
+ * Two claims keep "one per day" while still guaranteeing the scheduled send:
+ *
+ * - `stock_report:sched:shop_*` gates ONLY the scheduled fire, so nothing
+ *   that ran earlier in the day (manual test, app-open catch-up) can make
+ *   the schedule come up empty. Duplicate scheduler instances dedupe on it.
+ * - `stock_report:shop_*` gates the catch-up/manual path; the schedule sets
+ *   it too, so after the scheduled send the catch-up stops for the day.
+ */
+class DailyStockReportJob implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /**
+     * FCM data payloads are capped (~4KB), so the list in the payload is
+     * truncated; the counts in the body always cover every product.
+     */
+    private const MAX_LISTED_PRODUCTS = 40;
+
+    /// Matches the dashboard's low-stock tier when a product has no
+    /// per-product override in stock_alerts.
+    private const DEFAULT_LOW_STOCK_THRESHOLD = 5;
+
+    /**
+     * The one send time of the day (24h, UTC — the app timezone). Shared by
+     * the scheduler in routes/console.php and the app-open catch-up's
+     * "after schedule" cutoff, so moving the time is a single edit.
+     * 02:30 UTC = 09:00 Myanmar (UTC+6:30).
+     */
+    public const SCHEDULE_TIME = '09:32';
+
+    /**
+     * @param bool $fromSchedule true when dispatched by the daily scheduler;
+     *  the send is then gated only by the schedule's own claim, so a manual
+     *  test or a catch-up earlier in the day can never make the scheduled
+     *  fire come up empty.
+     */
+    public function __construct(public bool $fromSchedule = false) {}
+
+    public function handle(FcmService $fcmService): void
+    {
+        $products = Product::where('active', true)
+            ->with('package.category.inventory')
+            ->get();
+
+        $alertsByShop = StockAlert::all()
+            ->groupBy(fn (StockAlert $alert) => (string) $alert->shop_id);
+
+        $byShop = $products->groupBy(
+            fn (Product $product) => (string) ($product->package?->category?->inventory?->shop_id ?? '')
+        );
+
+        $productsByPackage = $products->groupBy(
+            fn (Product $product) => (string) ($product->package_id ?? '')
+        );
+
+        // Active packages grouped by shop. A package counts as out when it has
+        // no active products at all or every one of them is at zero stock —
+        // the same rule the package-empty push uses.
+        $packagesByShop = Package::where('active', true)
+            ->with('category.inventory')
+            ->whereHas('category.inventory')
+            ->get()
+            ->groupBy(fn (Package $pkg) => (string) ($pkg->category?->inventory?->shop_id ?? ''));
+
+        // Every known shop — including ones without active products — so an
+        // idle shop still gets its once-a-day claim and stops being retried
+        // by the app-open catch-up.
+        $shopIds = Inventory::pluck('shop_id')
+            ->merge($byShop->keys())
+            ->merge($packagesByShop->keys())
+            ->map(fn ($id) => (string) $id)
+            ->filter(fn (string $id) => $id !== '')
+            ->unique()
+            ->values();
+
+        foreach ($shopIds as $shopId) {
+            $items = $byShop->get($shopId, collect());
+            [$out, $low] = $this->classify($items, $alertsByShop->get($shopId));
+
+            $packagesOut = [];
+            foreach ($packagesByShop->get($shopId, collect()) as $pkg) {
+                $pkgProducts = $productsByPackage->get((string) $pkg->id, collect());
+                if (
+                    $pkgProducts->isEmpty()
+                    || $pkgProducts->every(fn (Product $product) => $product->getAvailableStock() <= 0)
+                ) {
+                    $packagesOut[] = [
+                        'id' => (string) $pkg->id,
+                        'name' => (string) $pkg->name,
+                        'kind' => 'package_out',
+                    ];
+                }
+            }
+
+            // One claim per day and path. The schedule checks only its own
+            // key — so the scheduled fire ALWAYS sends (blocked solely by a
+            // duplicate scheduler run at the same time) — and then also sets
+            // the regular claim so the app-open catch-up stops for the rest
+            // of the day. The time is part of the schedule key: changing
+            // SCHEDULE_TIME same-day opens a fresh slot (one send per time
+            // value; a fixed production time still means one per day). The
+            // claim is set even with nothing to report, so a quiet day
+            // stops the catch-up from redispatching until tomorrow.
+            $date = now()->toDateString();
+            if ($this->fromSchedule) {
+                $scheduleKey = 'stock_report:sched:shop_' . $shopId . ':' . $date . ':' . self::SCHEDULE_TIME;
+                if (!$this->claim($scheduleKey)) {
+                    continue;
+                }
+                $this->claim('stock_report:shop_' . $shopId . ':' . $date);
+            } elseif (!$this->claim('stock_report:shop_' . $shopId . ':' . $date)) {
+                continue;
+            }
+
+            if (empty($out) && empty($low) && empty($packagesOut)) {
+                continue;
+            }
+
+            $body = count($out) . ' out of stock, ' . count($low) . ' low stock';
+            if (!empty($packagesOut)) {
+                $body .= ', ' . count($packagesOut) . ' packages out';
+            }
+
+            $fcmService->sendToShop(
+                (int) $shopId,
+                'Daily Stock Report',
+                $body,
+                [
+                    'type' => 'stock_report',
+                    'category' => 'alert',
+                    'out_count' => (string) count($out),
+                    'low_count' => (string) count($low),
+                    'package_out_count' => (string) count($packagesOut),
+                    'products' => (string) json_encode(
+                        array_slice([...$out, ...$low], 0, self::MAX_LISTED_PRODUCTS)
+                    ),
+                    'packages' => (string) json_encode(
+                        array_slice($packagesOut, 0, self::MAX_LISTED_PRODUCTS)
+                    ),
+                ]
+            );
+        }
+    }
+
+    /**
+     * Splits one shop's products into out-of-stock and low-stock entries.
+     *
+     * Availability goes through getAvailableStock() (not the stock column)
+     * so bundle products report their component-derived stock. A stock_alerts
+     * row overrides the default threshold; is_active = false opts the product
+     * out of the low-stock list entirely.
+     *
+     * @return array{0: array<int, array<string, string>>, 1: array<int, array<string, string>>}
+     */
+    private function classify($items, $alerts)
+    {
+        $out = [];
+        $low = [];
+
+        foreach ($items as $product) {
+            $stock = $product->getAvailableStock();
+
+            if ($stock <= 0) {
+                $out[] = [
+                    'id' => (string) $product->id,
+                    'name' => (string) $product->name,
+                    'kind' => 'out',
+                    'stock' => (string) $stock,
+                    'threshold' => '',
+                ];
+                continue;
+            }
+
+            $alert = $alerts?->first(
+                fn (StockAlert $a) => (int) $a->product_id === (int) $product->id
+            );
+            if ($alert !== null && !$alert->is_active) {
+                continue;
+            }
+
+            $threshold = $alert?->threshold ?? self::DEFAULT_LOW_STOCK_THRESHOLD;
+            if ($stock <= $threshold) {
+                $low[] = [
+                    'id' => (string) $product->id,
+                    'name' => (string) $product->name,
+                    'kind' => 'low',
+                    'stock' => (string) $stock,
+                    'threshold' => (string) $threshold,
+                ];
+            }
+        }
+
+        return [$out, $low];
+    }
+
+    private function claim(string $key): bool
+    {
+        $lock = Cache::lock($key . ':lock', 15);
+
+        if (!$lock->get()) {
+            return false;
+        }
+
+        try {
+            if (Cache::has($key)) {
+                return false;
+            }
+            Cache::put($key, true, now()->addDays(2));
+            return true;
+        } finally {
+            $lock->release();
+        }
+    }
+}

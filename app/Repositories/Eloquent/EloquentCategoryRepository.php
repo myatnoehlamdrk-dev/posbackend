@@ -41,7 +41,10 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
             });
         }
 
-        return $query->withCount('packages')->with('inventory', 'packages.products', 'createdByUser', 'updatedByUser')->latest()->paginate(20);
+        // `per_page` is clamped to 100 by the service, so this cannot be used
+        // to pull an unbounded page; the default stays 20 for clients that do
+        // not ask. `page` is read from the request by the paginator itself.
+        return $query->withCount('packages')->with('inventory', 'packages.products', 'createdByUser', 'updatedByUser')->latest()->paginate($request->integer('per_page', 20));
     }
 
     public function findById(int $id): ?Category

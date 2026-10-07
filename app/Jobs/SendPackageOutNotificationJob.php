@@ -10,14 +10,20 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 
-class SendStockOutNotificationJob implements ShouldQueue
+/**
+ * Fires when every product inside a package has gone out of stock — the
+ * package itself can no longer be sold. Claims its slot atomically, like
+ * SendStockOutNotificationJob, because TiDB lets several queue:work workers
+ * pop the same job row.
+ */
+class SendPackageOutNotificationJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function __construct(
         private readonly ?int $shopId,
-        private readonly string $productName,
-        private readonly string $productId,
+        private readonly int $packageId,
+        private readonly string $packageName,
     ) {}
 
     public function handle(FcmService $fcmService): void
@@ -30,33 +36,22 @@ class SendStockOutNotificationJob implements ShouldQueue
             return;
         }
 
-        $title = 'Out of Stock';
-        $body = $this->productName . ' is out of stock';
-
         $fcmService->sendToShop(
             $this->shopId,
-            $title,
-            $body,
+            'Package Out of Stock',
+            $this->packageName . ' has no products left in stock',
             [
-                'type' => 'stock_out',
+                'type' => 'package_out',
                 'category' => 'alert',
-                'product_id' => (string) $this->productId,
-                'product_name' => $this->productName,
+                'package_id' => (string) $this->packageId,
+                'package_name' => $this->packageName,
             ]
         );
     }
 
-    /**
-     * Atomically claims the 24h "already notified" slot for this product.
-     *
-     * TiDB does not enforce FOR UPDATE SKIP LOCKED, so with more than one
-     * queue:work running both workers can pop the same job row. The file
-     * cache lock serialises them; the first one to find the key unset claims
-     * it and sends, the duplicate pop sees the key and exits.
-     */
     private function claimNotificationSlot(): bool
     {
-        $key = "stock_out_notified:shop_{$this->shopId}:product_{$this->productId}";
+        $key = "package_out_notified:shop_{$this->shopId}:package_{$this->packageId}";
         $lock = Cache::lock($key . ':lock', 15);
 
         if (!$lock->get()) {

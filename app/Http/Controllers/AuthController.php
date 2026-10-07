@@ -3,14 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Enums\UserRole;
+use App\Http\Resources\ShopResource;
 use App\Http\Resources\UserResource;
 use App\Mail\OtpMail;
+use App\Models\Shop;
 use App\Models\User;
+use App\Services\ImgBBService;
 use App\Services\LoginAttemptService;
 use App\Services\OtpService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -18,6 +23,7 @@ class AuthController extends Controller
     public function __construct(
         protected LoginAttemptService $loginAttempts,
         protected OtpService $otp,
+        protected ImgBBService $imgbb,
     ) {}
     public function register(Request $request): JsonResponse
     {
@@ -33,6 +39,24 @@ class AuthController extends Controller
             'dob' => ['nullable', 'string'],
             'gender' => ['nullable', 'string'],
             'shopId' => ['nullable', 'exists:shops,id'],
+
+            // A registrant has no token yet, so the shop cannot be created
+            // through POST /shops -- that route sits behind auth:sanctum and
+            // 401s every first-time sign-up. The shop therefore travels with
+            // the account and is written in the same transaction as the user,
+            // which also keeps a shop from existing without its owner if the
+            // user insert fails. `shopId` stays valid for the other order:
+            // picking a shop that already exists.
+            'shop' => ['nullable', 'array'],
+            'shop.name' => ['required_with:shop', 'string', 'max:255'],
+            'shop.type' => ['nullable', 'string', 'max:255'],
+            'shop.physicalAddress' => ['nullable', 'string', 'max:255'],
+            'shop.logoUrl' => ['nullable', 'string', 'max:1024'],
+            'shop.logoData' => ['nullable', 'string'],
+            'shop.ownerInformation' => ['nullable', 'array'],
+            'shop.ownerInformation.name' => ['nullable', 'string', 'max:255'],
+            'shop.ownerInformation.email' => ['nullable', 'email', 'max:255'],
+            'shop.ownerInformation.phone' => ['nullable', 'string', 'max:50'],
         ]);
 
         // `role` is deliberately absent from the validated payload. It used to
@@ -40,26 +64,57 @@ class AuthController extends Controller
         // anyone POST `{"role": "admin"}` at this endpoint and walk into the
         // admin group on their first sign-in. Roles are assigned by an admin
         // through the admin endpoints, never by the registrant.
-        $user = User::create([
-            'name' => $data['fullName'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-            'phone' => $data['phone'] ?? null,
-            'social' => $data['social'] ?? null,
-            'role' => UserRole::CASHIER->value,
-            'address' => $data['address'] ?? null,
-            'nrc_no' => $data['nrc'] ?? null,
-            'billing_way' => $data['billingWay'] ?? null,
-            'date_of_birth' => $data['dob'] ?? null,
-            'gender' => $data['gender'] ?? null,
-            'shop_id' => $data['shopId'] ?? null,
-            'is_verified' => false,
-        ]);
+
+        // The logo is resolved before the transaction opens: uploading to ImgBB
+        // is an outbound HTTP call, and holding a write transaction across it
+        // would keep the users and shops tables locked for the length of the
+        // round trip -- or for its timeout, if ImgBB is slow.
+        $shopLogo = ($data['shopId'] ?? null) === null && isset($data['shop'])
+            ? $this->resolveShopLogo($data['shop'])
+            : null;
+
+        [$user, $shop] = DB::transaction(function () use ($data, $shopLogo) {
+            $shop = null;
+            $shopId = $data['shopId'] ?? null;
+
+            if ($shopId === null && isset($data['shop'])) {
+                $shop = Shop::create([
+                    'shop_image' => $shopLogo,
+                    'shop_name' => $data['shop']['name'],
+                    'shop_type' => $data['shop']['type'] ?? null,
+                    'shop_physical_address' => $data['shop']['physicalAddress'] ?? null,
+                    'owner_name' => $data['shop']['ownerInformation']['name'] ?? null,
+                    'owner_email' => $data['shop']['ownerInformation']['email'] ?? null,
+                    'owner_phone' => $data['shop']['ownerInformation']['phone'] ?? null,
+                ]);
+                $shopId = $shop->id;
+            }
+
+            $user = User::create([
+                'name' => $data['fullName'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'phone' => $data['phone'] ?? null,
+                'social' => $data['social'] ?? null,
+                'role' => UserRole::CASHIER->value,
+                'address' => $data['address'] ?? null,
+                'nrc_no' => $data['nrc'] ?? null,
+                'billing_way' => $data['billingWay'] ?? null,
+                'date_of_birth' => $data['dob'] ?? null,
+                'gender' => $data['gender'] ?? null,
+                'shop_id' => $shopId,
+                'is_verified' => false,
+            ]);
+
+            return [$user, $shop];
+        });
 
         // Verification code, stored in its own table and confirmed by
         // EmailVerificationController. Previously written to
         // `password_reset_tokens` alongside password-reset codes, so the two
-        // flows for one address overwrote each other.
+        // flows for one address overwrote each other. Deliberately outside the
+        // transaction: a mail server that cannot be reached must not roll back
+        // an account that was otherwise created.
         $this->otp->send(
             $user->email,
             OtpService::VERIFICATION_TABLE,
@@ -69,7 +124,81 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Registration successful. Please verify your email.',
             'email' => $data['email'],
+            'id' => (string) $user->id,
+            'fullName' => $user->name,
+            'shopId' => $user->shop_id !== null ? (string) $user->shop_id : null,
+            'shop' => $shop !== null ? new ShopResource($shop) : null,
         ], 201);
+    }
+
+    /**
+     * Resolves the shop image from a registration payload.
+     *
+     * The logo reaches this endpoint as raw base64 because the authenticated
+     * `/images` upload cannot be called before the account exists, so this does
+     * server-side what that endpoint does: hand the bytes to ImgBB and store
+     * the link it returns, which is how every other image in the app is saved.
+     *
+     * ImgBB being unreachable must not fail a sign-up, so a failed upload falls
+     * back to writing the file locally -- the same fallback
+     * `ImageController::store` uses, and the same `/uploads/...` path
+     * `resolveMediaUrl` on the client understands.
+     */
+    private function resolveShopLogo(array $shop): ?string
+    {
+        $encoded = $shop['logoData'] ?? null;
+        if (! is_string($encoded) || $encoded === '') {
+            return $shop['logoUrl'] ?? null;
+        }
+
+        try {
+            $url = $this->imgbb->upload($encoded, 'shop_logo')['url'] ?? null;
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+
+            Log::warning('ImgBB returned no url for the registration logo; falling back to local storage.');
+        } catch (\Throwable $e) {
+            Log::warning('Registration logo upload to ImgBB failed; falling back to local storage', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $this->storeLogoLocally($encoded) ?? $shop['logoUrl'] ?? null;
+    }
+
+    /**
+     * Writes the decoded logo to `public/uploads` and returns its local path.
+     *
+     * Returns null rather than throwing when the payload is not usable base64:
+     * a logo that cannot be read is not a reason to reject the account.
+     */
+    private function storeLogoLocally(string $encoded): ?string
+    {
+        $binary = base64_decode($encoded, true);
+        if ($binary === false || $binary === '') {
+            Log::warning('Registration logo was not valid base64; saving the shop without it.');
+
+            return null;
+        }
+
+        $extension = match (true) {
+            str_starts_with($binary, "\xFF\xD8") => 'jpg',
+            str_starts_with($binary, "\x89PNG") => 'png',
+            str_starts_with($binary, 'GIF8') => 'gif',
+            str_starts_with($binary, 'RIFF') => 'webp',
+            default => 'png',
+        };
+
+        $directory = public_path('uploads');
+        if (! is_dir($directory)) {
+            mkdir($directory, 0755, true);
+        }
+
+        $filename = uniqid('shop_', true).'.'.$extension;
+        file_put_contents($directory.DIRECTORY_SEPARATOR.$filename, $binary);
+
+        return '/uploads/'.$filename;
     }
 
     public function login(Request $request): JsonResponse
