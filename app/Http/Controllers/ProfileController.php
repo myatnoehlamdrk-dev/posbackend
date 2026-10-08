@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\TokenToucher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -11,8 +12,18 @@ use Illuminate\Validation\ValidationException;
 
 class ProfileController extends Controller
 {
+    /**
+     * The signed-in user plus their shop.
+     *
+     * Dashboard reads this on every mount for the drawer avatar, which makes
+     * it the second of the two calls the client makes when it comes to the
+     * foreground -- so it slides the token's expiry too, keeping a till parked
+     * on the dashboard from expiring underneath itself. See TokenToucher.
+     */
     public function show(Request $request): JsonResponse
     {
+        TokenToucher::touch($request);
+
         $user = $request->user()->load('shop');
 
         return response()->json(UserResource::make($user));

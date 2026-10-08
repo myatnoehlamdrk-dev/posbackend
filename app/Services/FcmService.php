@@ -102,9 +102,16 @@ class FcmService
                         'title' => $title,
                         'body' => $body,
                     ],
-                    'data' => array_map('strval', $data),
                 ],
             ];
+
+            // FCM expects `data` to be a JSON object. An empty PHP array
+            // encodes as `[]`, which the API rejects with 400 "Cannot bind a
+            // list to map". Casting guarantees `{}` for the empty and
+            // list-shaped cases alike.
+            if ($data !== []) {
+                $payload['message']['data'] = (object) array_map('strval', $data);
+            }
 
             $response = $client->post(
                 'https://fcm.googleapis.com/v1/projects/' . $this->projectId . '/messages:send',

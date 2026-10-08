@@ -20,8 +20,9 @@ Artisan::command('stock-report:send', function () {
     $this->info('Report claims cleared for ' . $shopIds->count() . ' shop(s); summary push sent (test helper).');
 })->purpose('Send the daily stock summary now, ignoring the once-per-day claim (for testing)');
 
-// Guaranteed daily send: the scheduler only consults its own once-per-day
-// claim, so nothing earlier in the day can block it. The time lives in
+// Guaranteed daily send: reaching SCHEDULE_TIME always produces the push —
+// the scheduled fire consults no claim, so today's claim (set or not) and
+// anything earlier in the day cannot block it. The time lives in
 // DailyStockReportJob::SCHEDULE_TIME (shared with the app-open catch-up).
 Schedule::job(new DailyStockReportJob(fromSchedule: true))
     ->dailyAt(DailyStockReportJob::SCHEDULE_TIME);

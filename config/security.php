@@ -31,19 +31,28 @@ return [
     | API Token Lifetime
     |--------------------------------------------------------------------------
     |
-    | Minutes before a Sanctum token issued at login stops being accepted.
+    | Minutes a Sanctum token issued at login survives without being touched.
     |
-    | Sanctum treats the global `sanctum.expiration` and a token's own
-    | `expires_at` as two independent conditions that must both hold, so this
-    | is the effective cap when it is the shorter of the two. The value below
-    | is deliberately shorter than the 24-hour backstop in `sanctum.php`:
-    | a till that is unattended overnight should need a sign-in the next
-    | morning, and a token leaked from a stolen handset should stop working
-    | long before the day is out.
+    | Sanctum's global `sanctum.expiration` is checked against the token's
+    | `created_at` (an age cap, not a session length), so this is the only
+    | value that decides when an unused session dies: the guard reads the
+    | token's own `expires_at` separately and requires both to hold.
+    |
+    | The session is sliding rather than fixed: `App\Services\TokenToucher`
+    | moves `expires_at` forward to now + 5 days on the authenticated reads
+    | the client makes when it opens the app, so a till in daily use stays
+    | signed in indefinitely while one left alone for 5 days signs itself
+    | out. A token minted here is valid for 5 days from the moment of login
+    | if nobody opens the app again.
+    |
+    | This deliberately trades the old 12-hour hard stop -- which forced a
+    | sign-in every morning and limited a stolen token to half a day -- for a
+    | 5-day idle window. Lowering this shortens both the idle window and the
+    | grace a freshly logged-in device gets before it must be opened once.
     |
     */
 
-    'token_ttl_minutes' => env('API_TOKEN_TTL_MINUTES', 720),
+    'token_ttl_minutes' => env('API_TOKEN_TTL_MINUTES', 7200),
 
     /*
     |--------------------------------------------------------------------------

@@ -24,7 +24,7 @@ class DailyStockReportController extends Controller
 
         // Before today's scheduled time the schedule gets first shot; the
         // time is shared with the scheduler through the job's constant.
-        [$hour, $minute] = array_map('int', explode(':', DailyStockReportJob::SCHEDULE_TIME));
+        [$hour, $minute] = array_map('intval', explode(':', DailyStockReportJob::SCHEDULE_TIME));
         if ($now->lt($now->copy()->setTime($hour, $minute))) {
             return response()->json(['dispatched' => false, 'reason' => 'before_schedule']);
         }

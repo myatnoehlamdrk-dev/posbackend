@@ -49,17 +49,28 @@ return [
     | issues. It was null, which made a leaked token valid forever from any
     | machine, and no amount of client-side cleanup could take it back.
     |
-    | Note on precedence: Sanctum treats this and a token's own "expires_at" as
-    | two independent conditions that must *both* hold (see the guard in
-    | vendor/laravel/sanctum/src/Guard.php), so setting this does not cancel a
-    | shorter per-token expiry -- the effective lifetime is the shorter of the
-    | two. `security.token_ttl_minutes` is deliberately the smaller of the pair.
+    | Sanctum does not use this as a session length. Its guard tests
+    | `created_at`, not `expires_at`:
     |
-    | 1440 is a backstop, not the intended session length.
+    |     $accessToken->created_at->gt(now()->subMinutes($this->expiration))
+    |
+    | (vendor/laravel/sanctum/src/Guard.php). It is therefore a hard age cap on
+    | how long any one token may exist, regardless of how recently it was used,
+    | and it must sit well above the sliding idle window or it would sign an
+    | actively used till out on a fixed schedule.
+    |
+    | The 5-day idle window this app actually enforces lives on the token's own
+    | `expires_at`, which `security.token_ttl_minutes` seeds at login and
+    | `App\Services\TokenToucher` pushes forward on each authenticated read.
+    | This backstop only matters for a token whose `expires_at` is missing or
+    | was somehow set far ahead -- every token this app mints sets it
+    | (AuthController::login) -- so it is a last resort, not a session length.
+    |
+    | 129600 minutes = 90 days.
     |
     */
 
-    'expiration' => 1440,
+    'expiration' => 129600,
 
     /*
     |--------------------------------------------------------------------------

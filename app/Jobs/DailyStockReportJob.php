@@ -20,13 +20,13 @@ use Illuminate\Support\Facades\Cache;
  * push whose payload carries the per-product and per-package lists for the
  * in-app detail screen.
  *
- * Two claims keep "one per day" while still guaranteeing the scheduled send:
+ * Reaching SCHEDULE_TIME always produces the push: the scheduled fire is
+ * never gated by a claim, so today's claim (set or not) cannot stop it and
+ * repeated runs of the scheduled job may send more than once.
  *
- * - `stock_report:sched:shop_*` gates ONLY the scheduled fire, so nothing
- *   that ran earlier in the day (manual test, app-open catch-up) can make
- *   the schedule come up empty. Duplicate scheduler instances dedupe on it.
- * - `stock_report:shop_*` gates the catch-up/manual path; the schedule sets
- *   it too, so after the scheduled send the catch-up stops for the day.
+ * `stock_report:shop_*` gates only the catch-up/manual path (once a day);
+ * the schedule sets it too, so after the scheduled send the catch-up stops
+ * for the rest of the day.
  */
 class DailyStockReportJob implements ShouldQueue
 {
@@ -48,13 +48,13 @@ class DailyStockReportJob implements ShouldQueue
      * "after schedule" cutoff, so moving the time is a single edit.
      * 02:30 UTC = 09:00 Myanmar (UTC+6:30).
      */
-    public const SCHEDULE_TIME = '09:32';
+    public const SCHEDULE_TIME = '09:03';
 
     /**
      * @param bool $fromSchedule true when dispatched by the daily scheduler;
-     *  the send is then gated only by the schedule's own claim, so a manual
-     *  test or a catch-up earlier in the day can never make the scheduled
-     *  fire come up empty.
+     *  the send is then not gated at all, so reaching SCHEDULE_TIME always
+     *  produces the push — even when a manual test or the catch-up already
+     *  claimed today.
      */
     public function __construct(public bool $fromSchedule = false) {}
 
@@ -114,21 +114,16 @@ class DailyStockReportJob implements ShouldQueue
                 }
             }
 
-            // One claim per day and path. The schedule checks only its own
-            // key — so the scheduled fire ALWAYS sends (blocked solely by a
-            // duplicate scheduler run at the same time) — and then also sets
-            // the regular claim so the app-open catch-up stops for the rest
-            // of the day. The time is part of the schedule key: changing
-            // SCHEDULE_TIME same-day opens a fresh slot (one send per time
-            // value; a fixed production time still means one per day). The
-            // claim is set even with nothing to report, so a quiet day
-            // stops the catch-up from redispatching until tomorrow.
+            // The scheduled fire at SCHEDULE_TIME is never gated: today's
+            // claim yes or no, reaching the schedule time produces the push
+            // (repeated runs at that time may therefore send more than
+            // once). It still sets the regular claim so the app-open
+            // catch-up stops for the rest of the day. The catch-up/manual
+            // path stays once-a-day through that claim, which is set even
+            // with nothing to report so a quiet day stops redispatching
+            // until tomorrow.
             $date = now()->toDateString();
             if ($this->fromSchedule) {
-                $scheduleKey = 'stock_report:sched:shop_' . $shopId . ':' . $date . ':' . self::SCHEDULE_TIME;
-                if (!$this->claim($scheduleKey)) {
-                    continue;
-                }
                 $this->claim('stock_report:shop_' . $shopId . ':' . $date);
             } elseif (!$this->claim('stock_report:shop_' . $shopId . ':' . $date)) {
                 continue;

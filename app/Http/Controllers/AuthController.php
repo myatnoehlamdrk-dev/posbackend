@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\ImgBBService;
 use App\Services\LoginAttemptService;
 use App\Services\OtpService;
+use App\Services\TokenToucher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -316,8 +317,19 @@ class AuthController extends Controller
         );
     }
 
+    /**
+     * Answer "is this session still valid, and who is it" in one round trip.
+     *
+     * This is the app's launch-time probe: SplashScreen calls it before
+     * deciding whether to go straight to the dashboard or back to sign-in, and
+     * a 401 here is what sends the user to the login screen. It therefore also
+     * slides the token's expiry, so opening the app is what keeps the session
+     * alive -- see TokenToucher.
+     */
     public function me(Request $request): JsonResponse
     {
+        TokenToucher::touch($request);
+
         return response()->json(UserResource::make($request->user()->load('shop')));
     }
 }

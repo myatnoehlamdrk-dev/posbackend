@@ -76,6 +76,7 @@ if (! function_exists('pos_define_api_routes')) {
             Route::get('/dashboard/top-supplier', [App\Http\Controllers\DashboardController::class, 'topSupplier']);
             Route::get('/dashboard/expiring-stocks', [App\Http\Controllers\DashboardController::class, 'expiringStocks']);
             Route::get('/dashboard/low-stocks', [App\Http\Controllers\DashboardController::class, 'lowStocks']);
+            Route::get('/dashboard/monthly-sales', [App\Http\Controllers\DashboardController::class, 'monthlySales']);
             Route::get('/dashboard/tables/products', [App\Http\Controllers\DashboardController::class, 'productsTable']);
             Route::get('/dashboard/tables/stock', [App\Http\Controllers\DashboardController::class, 'stockTable']);
             Route::get('/dashboard/tables/sales', [App\Http\Controllers\DashboardController::class, 'salesTable']);
