@@ -141,18 +141,33 @@ class FcmService
         }
     }
 
-    public function sendToShop(?int $shopId, string $title, string $body, array $data = []): void
+    /**
+     * Returns true when the push reached at least one device token — or when
+     * the shop has no active tokens at all (nothing can be delivered, and
+     * retrying all day would not help). False only when every existing token
+     * failed, so callers can retry later instead of treating it as sent.
+     */
+    public function sendToShop(?int $shopId, string $title, string $body, array $data = []): bool
     {
         if (!$shopId) {
-            return;
+            return false;
         }
 
         $tokens = FcmToken::where('shop_id', $shopId)
             ->where('active', true)
             ->pluck('token');
 
-        foreach ($tokens as $token) {
-            $this->sendToToken($token, $title, $body, $data);
+        if ($tokens->isEmpty()) {
+            return true;
         }
+
+        $sent = false;
+        foreach ($tokens as $token) {
+            if ($this->sendToToken($token, $title, $body, $data)) {
+                $sent = true;
+            }
+        }
+
+        return $sent;
     }
 }

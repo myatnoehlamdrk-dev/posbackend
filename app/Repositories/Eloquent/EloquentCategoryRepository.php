@@ -107,20 +107,63 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
         }
 
         $categories = $query->withCount('packages')
+            ->withCount(['products as products_count' => fn ($q) => $q->where('products.active', true)])
             ->with('inventory', 'createdByUser', 'updatedByUser')
             ->orderBy('name', 'asc')
             ->get();
 
-        foreach ($categories as $category) {
-            $products = \App\Models\Product::where('active', true)
-                ->whereHas('package', fn ($q) => $q->where('category_id', $category->id))
-                ->with('package.category.inventory', 'supplier')
-                ->limit($productLimit)
-                ->get();
-
-            $category->setRelation('displayProducts', $products);
-        }
+        $this->attachDisplayProducts($categories, $productLimit);
 
         return $categories->filter(fn ($cat) => $cat->displayProducts->isNotEmpty())->values();
+    }
+
+    /**
+     * Load the product preview for every category in two queries instead of
+     * one query per category: with the API on TiDB Cloud each round trip is a
+     * network hop, so N+1 previews dominate the endpoint's latency.
+     *
+     * Only `products.id` and `packages.category_id` are read for the whole
+     * set (the heavy columns stay out of it), the per-category slice is taken
+     * in PHP, and the relations are eager-loaded just for that slice.
+     *
+     * @param  \Illuminate\Support\Collection<int, Category>  $categories
+     */
+    protected function attachDisplayProducts($categories, int $productLimit): void
+    {
+        $categoryIds = $categories->pluck('id');
+
+        if ($categoryIds->isEmpty()) {
+            return;
+        }
+
+        $matches = \App\Models\Product::query()
+            ->join('packages', 'packages.id', '=', 'products.package_id')
+            ->whereIn('packages.category_id', $categoryIds)
+            ->where('products.active', true)
+            ->orderBy('products.id')
+            ->get(['products.id', 'packages.category_id']);
+
+        $idsByCategory = $matches
+            ->groupBy('category_id')
+            ->map(fn ($rows) => $rows->take($productLimit)->pluck('id')->all());
+
+        $selectedIds = collect($idsByCategory)->flatten()->values()->all();
+
+        $products = $selectedIds === []
+            ? collect()
+            : \App\Models\Product::with('package.category.inventory', 'supplier')
+                ->whereIn('id', $selectedIds)
+                ->orderBy('id')
+                ->get()
+                ->keyBy('id');
+
+        foreach ($categories as $category) {
+            $category->setRelation(
+                'displayProducts',
+                collect($idsByCategory[$category->id] ?? [])
+                    ->map(fn ($id) => $products[$id])
+                    ->values()
+            );
+        }
     }
 }

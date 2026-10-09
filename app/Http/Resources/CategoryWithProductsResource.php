@@ -22,7 +22,7 @@ class CategoryWithProductsResource extends JsonResource
             'active' => (bool) $this->active,
             'amountOfPackage' => $this->packages_count ?? $this->amount_of_package,
             'products' => $products,
-            'totalProducts' => $this->packages_count ?? 0,
+            'totalProducts' => $this->products_count ?? 0,
         ];
     }
 }

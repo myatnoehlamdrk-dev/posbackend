@@ -25,8 +25,9 @@ use Illuminate\Support\Facades\Cache;
  * repeated runs of the scheduled job may send more than once.
  *
  * `stock_report:shop_*` gates only the catch-up/manual path (once a day);
- * the schedule sets it too, so after the scheduled send the catch-up stops
- * for the rest of the day.
+ * the schedule sets it too after a delivered push, so after the scheduled
+ * send the catch-up stops for the rest of the day. A failed send never
+ * holds the claim — the catch-up stays able to produce that day's push.
  */
 class DailyStockReportJob implements ShouldQueue
 {
@@ -48,7 +49,7 @@ class DailyStockReportJob implements ShouldQueue
      * "after schedule" cutoff, so moving the time is a single edit.
      * 02:30 UTC = 09:00 Myanmar (UTC+6:30).
      */
-    public const SCHEDULE_TIME = '09:03';
+    public const SCHEDULE_TIME = '03:11';
 
     /**
      * @param bool $fromSchedule true when dispatched by the daily scheduler;
@@ -117,19 +118,27 @@ class DailyStockReportJob implements ShouldQueue
             // The scheduled fire at SCHEDULE_TIME is never gated: today's
             // claim yes or no, reaching the schedule time produces the push
             // (repeated runs at that time may therefore send more than
-            // once). It still sets the regular claim so the app-open
-            // catch-up stops for the rest of the day. The catch-up/manual
-            // path stays once-a-day through that claim, which is set even
-            // with nothing to report so a quiet day stops redispatching
-            // until tomorrow.
+            // once). The catch-up/manual path stays once-a-day through the
+            // claim.
+            //
+            // The claim is only held after a push was actually delivered (or
+            // on a quiet day with nothing to report): if FCM fails, the claim
+            // is not set — or is dropped again — so the app-open catch-up can
+            // still produce that day's push later.
             $date = now()->toDateString();
-            if ($this->fromSchedule) {
-                $this->claim('stock_report:shop_' . $shopId . ':' . $date);
-            } elseif (!$this->claim('stock_report:shop_' . $shopId . ':' . $date)) {
-                continue;
+            $key = 'stock_report:shop_' . $shopId . ':' . $date;
+            $tookClaim = false;
+            if (!$this->fromSchedule) {
+                if (!$this->claim($key)) {
+                    continue;
+                }
+                $tookClaim = true;
             }
 
             if (empty($out) && empty($low) && empty($packagesOut)) {
+                // Quiet day: hold today's claim (no push needed) so the
+                // catch-up stops redispatching until tomorrow.
+                $this->claim($key);
                 continue;
             }
 
@@ -138,7 +147,7 @@ class DailyStockReportJob implements ShouldQueue
                 $body .= ', ' . count($packagesOut) . ' packages out';
             }
 
-            $fcmService->sendToShop(
+            $sent = $fcmService->sendToShop(
                 (int) $shopId,
                 'Daily Stock Report',
                 $body,
@@ -156,6 +165,15 @@ class DailyStockReportJob implements ShouldQueue
                     ),
                 ]
             );
+
+            if ($sent) {
+                $this->claim($key);
+            } elseif ($tookClaim) {
+                // Push failed — drop the claim taken at the top of this
+                // iteration so the app-open catch-up can retry later today.
+                // Never drop a claim taken by an earlier run.
+                Cache::forget($key);
+            }
         }
     }
 

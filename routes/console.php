@@ -26,3 +26,11 @@ Artisan::command('stock-report:send', function () {
 // DailyStockReportJob::SCHEDULE_TIME (shared with the app-open catch-up).
 Schedule::job(new DailyStockReportJob(fromSchedule: true))
     ->dailyAt(DailyStockReportJob::SCHEDULE_TIME);
+
+// Server-side safety net: the dailyAt fire happens only once, so if that
+// minute is missed (machine asleep, worker restarting) nothing would send
+// until an app opened again. Every minute after SCHEDULE_TIME this dispatches
+// the report while today's claim is missing — no app needs to be open.
+Schedule::command('stock-report:catchup')
+    ->everyMinute()
+    ->withoutOverlapping();
