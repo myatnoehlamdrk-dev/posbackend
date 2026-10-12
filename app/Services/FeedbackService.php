@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Http\Resources\FeedbackResource;
+use App\Jobs\SendFeedbackThankYouJob;
 use App\Models\Feedback;
 use App\Repositories\Contracts\FeedbackRepositoryInterface;
 use Illuminate\Http\JsonResponse;
@@ -46,6 +47,17 @@ class FeedbackService
             'type' => $data['type'] ?? Feedback::TYPE_COMMENT,
             'message' => $data['message'],
         ]);
+
+        // Acknowledgement only: the push is queued after the row exists so
+        // the detail screen behind it can always find the feedback it names.
+        SendFeedbackThankYouJob::dispatch(
+            $shopId,
+            $userId,
+            (string) ($feedback->user?->name ?? ''),
+            (int) $feedback->id,
+            (string) $feedback->type,
+            (string) $feedback->message,
+        );
 
         return response()->json(new FeedbackResource($feedback), 201);
     }

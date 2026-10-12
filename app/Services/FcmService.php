@@ -147,6 +147,44 @@ class FcmService
      * retrying all day would not help). False only when every existing token
      * failed, so callers can retry later instead of treating it as sent.
      */
+    /**
+     * Fan-out to ONE person's devices (the feedback thank-you is addressed
+     * to its author, not to the shop). When that user has no active token of
+     * their own — a device registered before user ids were stored, say — it
+     * falls back to [$fallbackShopId] so the message still lands somewhere
+     * instead of vanishing. Same return contract as [sendToShop].
+     */
+    public function sendToUser(
+        int $userId,
+        string $title,
+        string $body,
+        array $data = [],
+        ?int $fallbackShopId = null,
+    ): bool {
+        $tokens = FcmToken::where('user_id', $userId)
+            ->where('active', true)
+            ->pluck('token');
+
+        if ($tokens->isEmpty() && $fallbackShopId) {
+            $tokens = FcmToken::where('shop_id', $fallbackShopId)
+                ->where('active', true)
+                ->pluck('token');
+        }
+
+        if ($tokens->isEmpty()) {
+            return true;
+        }
+
+        $sent = false;
+        foreach ($tokens as $token) {
+            if ($this->sendToToken($token, $title, $body, $data)) {
+                $sent = true;
+            }
+        }
+
+        return $sent;
+    }
+
     public function sendToShop(?int $shopId, string $title, string $body, array $data = []): bool
     {
         if (!$shopId) {

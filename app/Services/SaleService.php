@@ -51,10 +51,10 @@ class SaleService
 
                 $sale = $this->saleRepository->create([
                     'user_id' => $resolvedUserId,
-                    'user_name' => $data['userName'],
+                    'user_name' => $data['userName'] ?? null,
                     'created_by' => $userId,
-                    'voucher_no' => $data['voucherNo'],
-                    'order_id' => $data['orderId'],
+                    'voucher_no' => $data['voucherNo'] ?? null,
+                    'order_id' => $data['orderId'] ?? null,
                     'product_id' => $aggregated['product_ids'] ?: null,
                     'product_name' => $aggregated['product_names'],
                     'quantity_sold' => $aggregated['quantities'],
@@ -88,16 +88,31 @@ class SaleService
                     ]);
                 }
 
-                if ($convertedOrder !== null) {
-                    // Every sale passes through add-to-cart/order, so stock is
-                    // already checked and deducted when the order is created.
-                    // The sale records the sale without checking stock; the
-                    // fulfilled order is removed without restoring stock.
+                if ($convertedOrder === null) {
+                    // No server order backs this sale, so its stock was
+                    // never checked or deducted -- deduct here so the
+                    // deduct-then-restore pairing survives a later delete.
+                    $this->deductSaleItems($data['items']);
+                } else {
+                    // The draft's stock pin simply converts: the order row
+                    // is removed and the deduction stands. Cancelled orders
+                    // are the exception -- cancelling restored their stock,
+                    // so this sale must deduct again.
+                    if ($convertedOrder->status === 'cancelled') {
+                        $this->deductSaleItems($data['items']);
+                    } else {
+                        // The cashier may have added or removed items after
+                        // the draft was saved, so the cart being sold can
+                        // differ from the snapshot that pinned the stock.
+                        // Move the pin onto the cart before the delete below
+                        // leaves it standing for the sale.
+                        $this->reconcileDraftStock($convertedOrder, $data['items']);
+                    }
                     $convertedOrder->delete();
                 }
 
                 return $sale;
-            });
+            }, 3);
         } catch (InsufficientStockException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -168,10 +183,10 @@ class SaleService
                 }
             }
 
-            $this->saleRepository->delete($sale);
+                $this->saleRepository->delete($sale);
 
-            return ['saleId' => $sale->id, 'qtyByProduct' => $qtyByProduct];
-        });
+                return ['saleId' => $sale->id, 'qtyByProduct' => $qtyByProduct];
+            }, 3);
 
         // Queued after the commit so the push reads the restored stock, not
         // the pre-commit snapshot; one push per restored product.
@@ -228,5 +243,124 @@ class SaleService
         }
 
         return response()->json(new \App\Http\Resources\SaleResource($sale->fresh()->load('saleItems')));
+    }
+
+    /**
+     * Deducts stock for every sale item that carries a product id, inside
+     * the caller's transaction. Used when a sale is created without a live
+     * draft order that already pinned its stock (no order id, or an order
+     * that was cancelled). Ordering matches OrderService so the row locks
+     * are acquired in the same global order.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function deductSaleItems(array $items): void
+    {
+        usort(
+            $items,
+            static fn (array $a, array $b): int =>
+                ((int) ($a['productId'] ?? 0)) <=> ((int) ($b['productId'] ?? 0))
+        );
+
+        foreach ($items as $item) {
+            if (!empty($item['productId'])) {
+                $this->stockRepository->deduct(
+                    (int) $item['productId'],
+                    (int) $item['quantity'],
+                    $item['size'] ?? null,
+                    $item['color'] ?? null
+                );
+            }
+        }
+    }
+
+    /**
+     * Moves a converting draft's stock pin from its saved snapshot onto the
+     * cart actually being sold.
+     *
+     * A draft pins stock for the items it was created with, but the cashier
+     * can reopen the card and add or remove lines before converting. Without
+     * this step the difference is never deducted (added lines oversell, and
+     * deleting the sale later would restore stock that was never taken) or
+     * never returned (removed lines leave stock stuck down). Each per-item
+     * delta is applied here, inside the sale transaction, so the pin always
+     * ends up matching what is actually sold. An unchanged cart produces no
+     * deltas, which is the common path and a no-op.
+     *
+     * @param  array<int, array<string, mixed>>  $newItems
+     */
+    private function reconcileDraftStock(Order $order, array $newItems): void
+    {
+        $old = self::quantitiesByStockKey($order->items ?? []);
+        $new = self::quantitiesByStockKey($newItems);
+
+        $deltas = [];
+        foreach (array_unique(array_merge(array_keys($old), array_keys($new))) as $key) {
+            $delta = ($new[$key]['quantity'] ?? 0) - ($old[$key]['quantity'] ?? 0);
+            if ($delta === 0) {
+                continue;
+            }
+            $source = $new[$key] ?? $old[$key];
+            $deltas[] = [
+                'productId' => $source['productId'],
+                'size' => $source['size'],
+                'color' => $source['color'],
+                'delta' => $delta,
+            ];
+        }
+
+        if ($deltas === []) {
+            return;
+        }
+
+        // Ascending product id, matching every other stock path so the row
+        // locks are acquired in the same global order.
+        usort($deltas, static fn (array $a, array $b): int => $a['productId'] <=> $b['productId']);
+
+        foreach ($deltas as $delta) {
+            if ($delta['delta'] > 0) {
+                $this->stockRepository->deduct($delta['productId'], $delta['delta'], $delta['size'], $delta['color']);
+            } else {
+                $this->stockRepository->restore($delta['productId'], -$delta['delta'], $delta['size'], $delta['color']);
+            }
+        }
+    }
+
+    /**
+     * Sums item quantities keyed by product + size + color, skipping lines
+     * with no product id (they were never stock-pinned and never will be).
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<string, array{productId: int, size: ?string, color: ?string, quantity: int}>
+     */
+    private static function quantitiesByStockKey(array $items): array
+    {
+        $map = [];
+        foreach ($items as $item) {
+            if (empty($item['productId'])) {
+                continue;
+            }
+
+            $key = self::stockKey($item);
+            $map[$key] ??= [
+                'productId' => (int) $item['productId'],
+                'size' => $item['size'] ?? null,
+                'color' => $item['color'] ?? null,
+                'quantity' => 0,
+            ];
+            $map[$key]['quantity'] += (int) ($item['quantity'] ?? 0);
+        }
+
+        return $map;
+    }
+
+    private static function stockKey(array $item): string
+    {
+        return sprintf(
+            '%d|%s|%s',
+            (int) ($item['productId'] ?? 0),
+            (string) ($item['size'] ?? ''),
+            (string) ($item['color'] ?? '')
+        );
     }
 }

@@ -43,9 +43,9 @@ class OrderService
 
                 $order = $this->orderRepository->create([
                     'user_id' => $userId,
-                    'user_name' => $data['userName'],
-                    'voucher_no' => $data['voucherNo'],
-                    'order_id' => $data['orderId'],
+                    'user_name' => $data['userName'] ?? null,
+                    'voucher_no' => $data['voucherNo'] ?? null,
+                    'order_id' => $data['orderId'] ?? null,
                     'product_id' => $aggregated['product_ids'] ?: null,
                     'product_name' => $aggregated['product_names'],
                     'quantity_sold' => $aggregated['quantities'],
@@ -64,7 +64,7 @@ class OrderService
                 $numbers = $this->orderNumberService->generate($order);
                 $this->orderRepository->update($order, $numbers);
 
-                foreach ($data['items'] as $item) {
+                foreach (self::byProductId($data['items']) as $item) {
                     if (!empty($item['productId'])) {
                         $product = Product::with('package.category.inventory')->find($item['productId']);
                         $oldStock = $product ? $product->getAvailableStock() : 0;
@@ -84,7 +84,7 @@ class OrderService
                 }
 
                 return $order;
-            });
+            }, 3);
         } catch (InsufficientStockException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -111,7 +111,7 @@ class OrderService
             $this->orderRepository->update($order, $data);
 
             if ($newStatus === 'cancelled' && $oldStatus !== 'cancelled') {
-                foreach ($order->items as $item) {
+                foreach (self::byProductId($order->items ?? []) as $item) {
                     if (!empty($item['productId'])) {
                         $this->stockRepository->restore(
                             $item['productId'],
@@ -122,7 +122,7 @@ class OrderService
                     }
                 }
             }
-        });
+        }, 3);
 
         return response()->json(new OrderResource($this->orderRepository->findById($order->id)));
     }
@@ -131,7 +131,7 @@ class OrderService
     {
         DB::transaction(function () use ($order) {
             if ($order->status !== 'cancelled') {
-                foreach ($order->items as $item) {
+                foreach (self::byProductId($order->items ?? []) as $item) {
                     if (!empty($item['productId'])) {
                         $this->stockRepository->restore(
                             $item['productId'],
@@ -144,7 +144,7 @@ class OrderService
             }
 
             $this->orderRepository->delete($order);
-        });
+        }, 3);
 
         return response()->json(null, 204);
     }
@@ -153,7 +153,7 @@ class OrderService
     {
         try {
             $order = DB::transaction(function () use ($data, $order) {
-                foreach ($data['items'] as $item) {
+                foreach (self::byProductId($data['items']) as $item) {
                     if (!empty($item['productId'])) {
                         $product = Product::with('package.category.inventory')->find($item['productId']);
                         $oldStock = $product ? $product->getAvailableStock() : 0;
@@ -185,7 +185,7 @@ class OrderService
                     'items' => $merged,
                     'grand_total' => $grandTotal,
                 ]);
-            });
+            }, 3);
         } catch (InsufficientStockException $e) {
             return response()->json([
                 'message' => $e->getMessage(),
@@ -196,5 +196,25 @@ class OrderService
         }
 
         return response()->json(new OrderResource($this->orderRepository->findById($order->id)), 200);
+    }
+
+    /**
+     * Items ordered by ascending product id so every stock operation in the
+     * transaction acquires row locks in the same global order. Without a
+     * consistent order, two concurrent multi-item orders holding each
+     * other's first lock deadlock, and the database aborts one of them.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    private static function byProductId(array $items): array
+    {
+        usort(
+            $items,
+            static fn (array $a, array $b): int =>
+                ((int) ($a['productId'] ?? 0)) <=> ((int) ($b['productId'] ?? 0))
+        );
+
+        return $items;
     }
 }

@@ -49,7 +49,7 @@ class DailyStockReportJob implements ShouldQueue
      * "after schedule" cutoff, so moving the time is a single edit.
      * 02:30 UTC = 09:00 Myanmar (UTC+6:30).
      */
-    public const SCHEDULE_TIME = '03:11';
+    public const SCHEDULE_TIME = '01:11';
 
     /**
      * @param bool $fromSchedule true when dispatched by the daily scheduler;

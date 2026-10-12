@@ -3,6 +3,7 @@
 namespace App\Calculators;
 
 use App\Contracts\StockCalculatorInterface;
+use App\Exceptions\InsufficientStockException;
 use App\Models\Product;
 use Illuminate\Support\Facades\DB;
 
@@ -75,6 +76,19 @@ class VariantStockCalculator implements StockCalculatorInterface
                 if ($matchedIndex !== null) {
                     $variant = $variants[$matchedIndex];
                     $variantQty = $variant['quantity'] ?? 0;
+
+                    // Re-check under the lock: the repository's pre-check ran
+                    // before this transaction opened, so a concurrent sale
+                    // may have drained the variant since. Without this, min()
+                    // below would silently sell less than requested.
+                    if ($variantQty < $quantity) {
+                        throw new InsufficientStockException(
+                            $freshProduct->name,
+                            $quantity,
+                            (int) $variantQty
+                        );
+                    }
+
                     $deductFromVariant = min($variantQty, $remaining);
 
                     foreach ($variants as $index => $variant) {
@@ -88,27 +102,32 @@ class VariantStockCalculator implements StockCalculatorInterface
                         }
                     }
                 } else {
-                    foreach ($variants as $variant) {
-                        $variantQty = $variant['quantity'] ?? 0;
-
-                        if ($remaining <= 0) {
-                            $updatedVariants[] = $variant;
-                            continue;
-                        }
-
-                        $deductFromVariant = min($variantQty, $remaining);
-                        $remaining -= $deductFromVariant;
-
-                        $updatedVariants[] = array_merge($variant, [
-                            'quantity' => $variantQty - $deductFromVariant,
-                        ]);
-
-                        if ($remaining <= 0) {
-                            $updatedVariants[count($updatedVariants) - 1]['_last_deducted'] = true;
-                        }
-                    }
+                    // size/color was requested but no variant matches any
+                    // more: the variant was removed after the pre-check.
+                    // Selling other variants instead would fulfil the wrong
+                    // product, so fail rather than silently substitute.
+                    throw new InsufficientStockException(
+                        $freshProduct->name,
+                        $quantity,
+                        0
+                    );
                 }
             } else {
+                // Aggregate deduction: verify the summed stock covers the
+                // request before touching any variant, otherwise the loop
+                // below would silently ship a partial quantity.
+                $total = 0;
+                foreach ($variants as $variant) {
+                    $total += $variant['quantity'] ?? 0;
+                }
+                if ($total < $quantity) {
+                    throw new InsufficientStockException(
+                        $freshProduct->name,
+                        $quantity,
+                        (int) $total
+                    );
+                }
+
                 foreach ($variants as $variant) {
                     $variantQty = $variant['quantity'] ?? 0;
 

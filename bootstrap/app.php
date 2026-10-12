@@ -31,7 +31,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // Laravel emits a standard `Retry-After` header on 429, which is exactly
         // what the Flutter client parses to decide when to try again, so no
         // custom header or JSON body shape is invented here.
+        // Idempotency runs before throttling so an outbox replay of an
+        // already-completed request is answered from cache without
+        // spending rate-limit budget (and cannot be starved by it).
         $middleware->api(append: [
+            \App\Http\Middleware\IdempotencyMiddleware::class,
             \Illuminate\Routing\Middleware\ThrottleRequests::class.':api',
         ]);
     })
