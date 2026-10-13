@@ -6,8 +6,10 @@ use App\Enums\UserRole;
 use App\Http\Resources\ShopResource;
 use App\Http\Resources\UserResource;
 use App\Mail\OtpMail;
+use App\Mail\ShopOwnerNoticeMail;
 use App\Models\Shop;
 use App\Models\User;
+use App\Rules\MyanmarNrc;
 use App\Services\ImgBBService;
 use App\Services\LoginAttemptService;
 use App\Services\OtpService;
@@ -17,6 +19,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -30,12 +35,26 @@ class AuthController extends Controller
     {
         $data = $request->validate([
             'fullName' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:users,email'],
+            // Uniqueness is against *active* accounts only. An inactive row
+            // (`active_status = 0` -- dismissed staff, or a sign-up that was
+            // never approved) no longer owns its address, and treating the
+            // email as taken forever would leave that person with no way to
+            // sign up again. The inactive row is parked inside the
+            // transaction below, so the table's UNIQUE constraint still holds
+            // by the time the new account is inserted.
+            'email' => [
+                'required',
+                'email',
+                Rule::unique('users', 'email')->where('active_status', true),
+            ],
             'password' => ['required', 'string', 'min:6'],
             'phone' => ['nullable', 'string'],
             'social' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
-            'nrc' => ['nullable', 'string'],
+            // Myanmar NRC, optional but format-checked when present:
+            // 12/KHA(N)191445 -- see App\Rules\MyanmarNrc. Persisted
+            // normalized (trimmed, uppercased) below.
+            'nrc' => ['nullable', 'string', 'max:255', new MyanmarNrc()],
             'billingWay' => ['nullable', 'max:255'],
             'dob' => ['nullable', 'string'],
             'gender' => ['nullable', 'string'],
@@ -78,6 +97,28 @@ class AuthController extends Controller
             $shop = null;
             $shopId = $data['shopId'] ?? null;
 
+            // Park the inactive account that held this address, if any. The
+            // row itself survives intact -- sales, orders and audit logs keep
+            // pointing at it -- but its email becomes an undeliverable
+            // tombstone, which is what frees the address for the account
+            // being created here while `users.email` stays UNIQUE. The random
+            // suffix means even re-registering with a tombstoned address
+            // cannot collide with the row it once belonged to.
+            $inactive = User::query()
+                ->where('email', $data['email'])
+                ->where('active_status', false)
+                ->first();
+
+            if ($inactive !== null) {
+                $inactive->update([
+                    'email' => sprintf(
+                        'deactivated-%d-%s@parked.invalid',
+                        $inactive->id,
+                        Str::random(6),
+                    ),
+                ]);
+            }
+
             if ($shopId === null && isset($data['shop'])) {
                 $shop = Shop::create([
                     'shop_image' => $shopLogo,
@@ -99,7 +140,7 @@ class AuthController extends Controller
                 'social' => $data['social'] ?? null,
                 'role' => UserRole::CASHIER->value,
                 'address' => $data['address'] ?? null,
-                'nrc_no' => $data['nrc'] ?? null,
+                'nrc_no' => MyanmarNrc::normalize($data['nrc'] ?? null),
                 'billing_way' => $data['billingWay'] ?? null,
                 'date_of_birth' => $data['dob'] ?? null,
                 'gender' => $data['gender'] ?? null,
@@ -121,6 +162,30 @@ class AuthController extends Controller
             OtpService::VERIFICATION_TABLE,
             new OtpMail(OtpMail::PURPOSE_VERIFICATION),
         );
+
+        // Heads-up to the shop's owner address, which belongs to the shop and
+        // not to the account: `shop.ownerInformation.email` is a free-typed
+        // field, so it may well be somebody else's inbox. If that somebody did
+        // not ask to be listed as owner, this notice is the only thing that
+        // tells them. It is deliberately a separate mail from the verification
+        // code above -- nothing to confirm, nothing that gates the sign-up --
+        // so a mail server that cannot be reached is logged and swallowed,
+        // exactly like a failed logo upload. The account was already created
+        // and must stay created either way.
+        if ($shop !== null && filled($shop->owner_email)) {
+            try {
+                Mail::to($shop->owner_email)->send(new ShopOwnerNoticeMail(
+                    shopName: $shop->shop_name,
+                    ownerName: $shop->owner_name,
+                ));
+            } catch (\Throwable $e) {
+                Log::warning('Owner notice email failed to send after registration.', [
+                    'shop_id' => $shop->id,
+                    'owner_email' => $shop->owner_email,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         return response()->json([
             'message' => 'Registration successful. Please verify your email.',

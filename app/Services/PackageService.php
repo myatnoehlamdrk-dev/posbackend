@@ -41,7 +41,12 @@ class PackageService
 
     public function show(\App\Models\Package $package): JsonResponse
     {
-        $package->loadCount('products');
+        // The product count must be live (products are added and removed from
+        // the package detail screen), and the attribution relations are loaded
+        // because that same screen refetches the package after every change —
+        // without them the response drops `createdBy`/`updatedBy` and the
+        // header blanks them out.
+        $package->loadCount('products')->load(['createdByUser', 'updatedByUser']);
 
         return response()->json(new PackageResource($package));
     }

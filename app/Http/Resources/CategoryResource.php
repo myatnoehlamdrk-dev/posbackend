@@ -8,16 +8,12 @@ class CategoryResource extends JsonResource
 {
     public function toArray($request): array
     {
-        $productImages = [];
-        if ($this->relationLoaded('packages')) {
-            $productImages = $this->packages
-                ->flatMap(fn ($pkg) => $pkg->relationLoaded('products') ? $pkg->products : [])
-                ->filter(fn ($p) => !empty($p->image) && $p->active == 1)
-                ->pluck('image')
-                ->take(3)
-                ->values()
-                ->toArray();
-        }
+        // The previews are attached by the repository as `previewProducts`
+        // (three rows, id + image only). The old `packages.products` eager
+        // load existed solely for this array and cost the whole catalog.
+        $productImages = $this->relationLoaded('previewProducts')
+            ? $this->previewProducts->pluck('image')->values()->toArray()
+            : [];
 
         return [
             'id' => (string) $this->id,

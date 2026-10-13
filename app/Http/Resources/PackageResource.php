@@ -8,15 +8,12 @@ class PackageResource extends JsonResource
 {
     public function toArray($request): array
     {
-        $productImages = [];
-        if ($this->relationLoaded('products')) {
-            $productImages = $this->products
-                ->filter(fn ($p) => !empty($p->image) && $p->active == 1)
-                ->pluck('image')
-                ->take(3)
-                ->values()
-                ->toArray();
-        }
+        // Previews attached by the repository (`previewProducts`, three rows
+        // of id + image); the old full `products` eager load existed solely
+        // for this array.
+        $productImages = $this->relationLoaded('previewProducts')
+            ? $this->previewProducts->pluck('image')->values()->toArray()
+            : [];
 
         return [
             'id' => (string) $this->id,

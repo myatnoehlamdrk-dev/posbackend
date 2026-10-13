@@ -35,7 +35,52 @@ class EloquentPackageRepository implements PackageRepositoryInterface
               ->orWhereHas('category', fn ($cq) => $cq->where('user_id', $user->id));
         });
 
-        return $query->withCount('products')->with('products', 'createdByUser', 'updatedByUser')->latest()->paginate(20);
+        // `with('products')` used to ride along for the resource's three
+        // preview image strings, dragging the whole catalog over the wire on
+        // every page load (TiDB Cloud — each row is a network hop). The
+        // previews come from one small query instead; the counts stay live.
+        $packages = $query->withCount('products')
+            ->with('createdByUser', 'updatedByUser')
+            ->latest()
+            ->paginate(20);
+
+        $this->attachPreviewImages($packages->getCollection());
+
+        return $packages;
+    }
+
+    /**
+     * At most three product image URLs per package, in one query reading only
+     * `id`/`image` — the preview the resource used to carve out of a full
+     * `products` eager load, without shipping the catalog. Ordered by product
+     * id so the preview is stable.
+     *
+     * @param  \Illuminate\Support\Collection<int, Package>  $packages
+     */
+    protected function attachPreviewImages(\Illuminate\Support\Collection $packages): void
+    {
+        $packageIds = $packages->pluck('id');
+
+        if ($packageIds->isEmpty()) {
+            return;
+        }
+
+        $matches = \App\Models\Product::query()
+            ->whereIn('package_id', $packageIds)
+            ->where('active', true)
+            ->whereNotNull('image')
+            ->where('image', '!=', '')
+            ->orderBy('id')
+            ->get(['id', 'image', 'package_id']);
+
+        $byPackage = $matches->groupBy('package_id');
+
+        foreach ($packages as $package) {
+            $package->setRelation(
+                'previewProducts',
+                collect($byPackage[$package->id] ?? [])->take(3)->values(),
+            );
+        }
     }
 
     public function findById(int $id): ?Package

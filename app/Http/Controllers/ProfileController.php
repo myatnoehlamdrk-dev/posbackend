@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Rules\MyanmarNrc;
 use App\Services\TokenToucher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -45,7 +46,10 @@ class ProfileController extends Controller
             'social' => ['nullable', 'string'],
             'address' => ['nullable', 'string'],
             'status' => ['nullable', 'string'],
-            'nrc_no' => ['nullable', 'string'],
+            // Same format rule as register: 12/KHA(N)191445. A profile is the
+            // other door into this column, and one that accepts whatever the
+            // register endpoint would have rejected buys nothing.
+            'nrc_no' => ['nullable', 'string', 'max:255', new MyanmarNrc()],
             'billing_way' => ['nullable', 'string'],
             'date_of_birth' => ['nullable', 'string'],
             'gender' => ['nullable', 'string'],
@@ -53,6 +57,10 @@ class ProfileController extends Controller
             'image_delete_url' => ['nullable', 'string'],
             'type' => ['nullable', 'string'],
         ]);
+
+        if (array_key_exists('nrc_no', $data)) {
+            $data['nrc_no'] = MyanmarNrc::normalize($data['nrc_no']);
+        }
 
         $user->update($data);
 
