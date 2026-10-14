@@ -37,7 +37,7 @@ class IdempotencyMiddleware
      * How long the "currently executing" claim is held. A process that
      * dies mid-request releases its claim after this window.
      */
-    private const PENDING_TTL_SECONDS = 120;
+    private const PENDING_TTL_SECONDS = 300;
 
     public function handle(Request $request, Closure $next): Response
     {
