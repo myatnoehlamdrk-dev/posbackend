@@ -21,10 +21,19 @@ class BundleStockCalculator implements StockCalculatorInterface
             return 0;
         }
 
+        // One query for the whole bundle. This runs for every bundle row that
+        // gets serialized — lists, search, category-with-products — so the
+        // per-component Product::find it replaces was (components x rows)
+        // queries over the TiDB gateway.
+        $products = Product::query()
+            ->whereIn('id', $this->componentIds($components))
+            ->get(['id', 'stock'])
+            ->keyBy('id');
+
         $minStock = PHP_INT_MAX;
 
         foreach ($components as $component) {
-            $componentProduct = Product::find($component['product_id']);
+            $componentProduct = $products->get((int) $component['product_id']);
             if (!$componentProduct) {
                 throw new \RuntimeException(
                     "Bundle component product #{$component['product_id']} not found for bundle #{$product->id}"

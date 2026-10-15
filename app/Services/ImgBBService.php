@@ -80,6 +80,11 @@ class ImgBBService
 
         try {
             $response = Http::acceptJson()
+                // Hard-capped: this can run inline on product delete, and a
+                // default 30s HTTP timeout is what used to make a slow ImgBB
+                // look like a hung save.
+                ->connectTimeout(5)
+                ->timeout(15)
                 ->withOptions([
                     'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4],
                 ])
@@ -91,10 +96,7 @@ class ImgBBService
 
             $response->throw();
 
-            Log::info('ImgBB image deleted successfully', [
-                'delete_hash' => $hash,
-                'response' => $response->json(),
-            ]);
+            Log::info('ImgBB image deleted', ['delete_hash' => $hash]);
 
             return true;
         } catch (\Throwable $e) {

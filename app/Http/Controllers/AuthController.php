@@ -122,7 +122,7 @@ class AuthController extends Controller
             if ($shopId === null && isset($data['shop'])) {
                 $shop = Shop::create([
                     'shop_image' => $shopLogo,
-                    'shop_name' => $data['shop']['name'],
+                    'shop_name' => $this->uniqueShopName($data['shop']['name']),
                     'shop_type' => $data['shop']['type'] ?? null,
                     'shop_physical_address' => $data['shop']['physicalAddress'] ?? null,
                     'owner_name' => $data['shop']['ownerInformation']['name'] ?? null,
@@ -265,6 +265,19 @@ class AuthController extends Controller
         file_put_contents($directory.DIRECTORY_SEPARATOR.$filename, $binary);
 
         return '/uploads/'.$filename;
+    }
+
+    private function uniqueShopName(string $name): string
+    {
+        $candidate = $name;
+        $suffix = 0;
+
+        while (Shop::where('shop_name', $candidate)->exists()) {
+            $suffix++;
+            $candidate = "{$name}({$suffix})";
+        }
+
+        return $candidate;
     }
 
     public function login(Request $request): JsonResponse

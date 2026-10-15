@@ -29,6 +29,9 @@ class SettingController extends Controller
                 $shopImage = $shop->shop_image ?? '';
             }
         }
+        if (blank($shopImage)) {
+            $shopImage = $setting->shop_image ?? '';
+        }
 
         $data = SettingResource::make($setting)->toArray($request);
         $data['shopImage'] = $shopImage;

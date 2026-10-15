@@ -8,14 +8,19 @@ class ProductResource extends JsonResource
 {
     public function toArray($request): array
     {
+        // One computation, not two: for a bundle this is a stock calculation
+        // per component, and ProductResource is serialized once per row of
+        // every list, search and category-with-products response.
+        $stock = $this->getAvailableStock();
+
         return [
             'id' => (string) $this->id,
             'isSet' => (bool) $this->is_set,
             'name' => $this->name,
             'image' => $this->image ?? '',
             'imageDeleteUrl' => $this->image_delete_url ?? '',
-            'stock' => $this->getAvailableStock(),
-            'stockAvailable' => $this->getAvailableStock() > 0,
+            'stock' => $stock,
+            'stockAvailable' => $stock > 0,
             'size' => $this->size ?? '',
             'brand' => $this->brand ?? '',
             'color' => $this->color ?? '',

@@ -28,7 +28,9 @@ class EloquentProductRepository implements ProductRepositoryInterface
             $query->where('package_id', $request->integer('packageId'));
         }
 
-        if ($request->filled('categoryId')) {
+        if ($request->boolean('uncategorized')) {
+            $query->whereNull('products.package_id');
+        } elseif ($request->filled('categoryId')) {
             $query->whereHas('package', fn ($q) => $q->where('category_id', $request->integer('categoryId')));
         }
 
@@ -61,7 +63,12 @@ class EloquentProductRepository implements ProductRepositoryInterface
             $query->latest();
         }
 
-        return $query->paginate($request->integer('per_page', 10));
+        // Clamped: per_page carried no validation here, so ?per_page=100000
+        // pulled the entire table (with its correlated EXISTS scope and a
+        // COUNT over the same) across the TiDB gateway.
+        $perPage = min(max($request->integer('per_page', 10), 1), 100);
+
+        return $query->paginate($perPage);
     }
 
     public function latestForShop(Request $request, int $limit): Collection

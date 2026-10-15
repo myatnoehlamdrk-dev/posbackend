@@ -3,7 +3,9 @@
 namespace App\Repositories\Eloquent;
 
 use App\Models\Category;
+use App\Models\Product;
 use App\Repositories\Contracts\CategoryRepositoryInterface;
+use App\Repositories\Eloquent\Concerns\ProductShopScope;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 
@@ -195,7 +197,52 @@ class EloquentCategoryRepository implements CategoryRepositoryInterface
 
         $this->attachDisplayProducts($categories, $productLimit);
 
-        return $categories->filter(fn ($cat) => $cat->displayProducts->isNotEmpty())->values();
+        $categories = $categories->filter(fn ($cat) => $cat->displayProducts->isNotEmpty())->values();
+
+        $uncategorized = $this->makeUncategorized($request, $productLimit);
+        if ($uncategorized !== null) {
+            $categories = $categories->push($uncategorized)
+                ->sortBy(fn ($cat) => mb_strtolower((string) $cat->name))
+                ->values();
+        }
+
+        return $categories;
+    }
+
+    private function makeUncategorized(Request $request, int $productLimit): ?Category
+    {
+        if ($request->filled('search')
+            && stripos('Uncategorized', (string) $request->input('search')) === false) {
+            return null;
+        }
+
+        $query = Product::query()
+            ->where('active', true)
+            ->with('package.category.inventory', 'supplier');
+
+        ProductShopScope::applyOrphan($query, $request->user()->shop_id);
+
+        $total = (clone $query)->count();
+        if ($total === 0) {
+            return null;
+        }
+
+        $uncategorized = new Category();
+        $uncategorized->id = null;
+        $uncategorized->name = 'Uncategorized';
+        $uncategorized->description = '';
+        $uncategorized->inventory_id = null;
+        $uncategorized->active = true;
+        $uncategorized->amount_of_package = 0;
+        $uncategorized->packages_count = 0;
+        $uncategorized->products_count = $total;
+        $uncategorized->setRelation('inventory', null);
+        $uncategorized->setRelation(
+            'displayProducts',
+            (clone $query)->orderBy('products.id')->limit($productLimit)->get()
+        );
+
+        return $uncategorized;
     }
 
     /**

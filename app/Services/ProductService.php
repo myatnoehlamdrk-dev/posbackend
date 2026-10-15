@@ -3,12 +3,14 @@
 namespace App\Services;
 
 use App\Http\Resources\ProductResource;
+use App\Jobs\DeleteImgbbImageJob;
 use App\Models\PurchaseItem;
 use App\Repositories\Contracts\ProductRepositoryInterface;
 use App\Repositories\Contracts\SupplierRepositoryInterface;
 use App\Traits\StockOutNotifier;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProductService
 {
@@ -17,12 +19,17 @@ class ProductService
     public function __construct(
         protected ProductRepositoryInterface $productRepository,
         protected SupplierRepositoryInterface $supplierRepository,
-        protected ImgBBService $imgbb,
     ) {}
 
     public function listForShop(Request $request): JsonResponse
     {
-        return response()->json(ProductResource::collection($this->productRepository->listForShop($request)));
+        // Returned through ->response() rather than wrapped in
+        // response()->json(): that wrapper serializes the resource collection
+        // flat -- items only -- because `meta` is added inside
+        // ResourceCollection::toResponse(), which it bypasses. Without the
+        // paginator the client had to guess whether another page existed and
+        // asked for one guaranteed extra page on every scroll.
+        return ProductResource::collection($this->productRepository->listForShop($request))->response();
     }
 
     public function latest(Request $request): JsonResponse
@@ -124,29 +131,42 @@ class ProductService
             $data['supplierName'] ?? null
         );
 
-        $this->handleImageReplacement($data, $product);
-
+        $removeImage = (bool) ($data['removeImage'] ?? false);
         $updatedVariants = $variants ?? $product->variants;
 
-        $updated = $this->productRepository->update($product, [
-            'is_set' => $data['isSet'] ?? $product->is_set,
-            'name' => $data['name'] ?? $product->name,
-            'image' => $data['image'] ?? $product->image,
-            'image_delete_url' => $data['imageDeleteUrl'] ?? $product->image_delete_url,
-            'stock' => $newStock,
-            'product_type' => (!empty($updatedVariants) && count($updatedVariants) > 0) ? 'variant' : 'simple',
-            'size' => $data['size'] ?? optional(head($variants))['size'] ?? $product->size,
-            'brand' => $data['brand'] ?? $product->brand,
-            'color' => $data['color'] ?? optional(head($variants))['color'] ?? $product->color,
-            'sku' => $data['sku'] ?? $product->sku,
-            'variants' => $updatedVariants,
-            'supplier_id' => $supplierId ?? $product->supplier_id,
-            'supplier_contact' => $data['supplierContact'] ?? $product->supplier_contact,
-            'supplier_since' => $data['supplierSince'] ?? $product->supplier_since,
-            'supplier_address' => $data['supplierAddress'] ?? $product->supplier_address,
-            'package_id' => array_key_exists('packageId', $data) ? $data['packageId'] : $product->package_id,
-            'updated_by' => $userId,
-        ]);
+        // Decided before the write, delivered after it. Retiring the outgoing
+        // image used to be an inline ImgBB call made *before* the row was
+        // saved: a slow third party held the whole PATCH open for its 30s HTTP
+        // timeout — the save the cashier asked for simply never happened — and
+        // when the save did fail, the product kept pointing at a photo that
+        // was already deleted.
+        $retiredImageDeleteUrl = $this->imageDeleteUrlToRetire($data, $product, $removeImage);
+
+        $updated = DB::transaction(function () use ($data, $product, $userId, $newStock, $updatedVariants, $supplierId, $removeImage) {
+            return $this->productRepository->update($product, [
+                'is_set' => $data['isSet'] ?? $product->is_set ?? false,
+                'name' => $data['name'] ?? $product->name,
+                'image' => $removeImage ? null : ($data['image'] ?? $product->image),
+                'image_delete_url' => $removeImage ? null : ($data['imageDeleteUrl'] ?? $product->image_delete_url),
+                'stock' => $newStock,
+                'product_type' => $this->resolveProductType($product, $updatedVariants),
+                'size' => $data['size'] ?? optional(head($updatedVariants))['size'] ?? $product->size,
+                'brand' => $data['brand'] ?? $product->brand,
+                'color' => $data['color'] ?? optional(head($updatedVariants))['color'] ?? $product->color,
+                'sku' => $data['sku'] ?? $product->sku,
+                'variants' => $updatedVariants,
+                'supplier_id' => $supplierId ?? $product->supplier_id,
+                'supplier_contact' => $data['supplierContact'] ?? $product->supplier_contact,
+                'supplier_since' => $data['supplierSince'] ?? $product->supplier_since,
+                'supplier_address' => $data['supplierAddress'] ?? $product->supplier_address,
+                'package_id' => array_key_exists('packageId', $data) ? $data['packageId'] : $product->package_id,
+                'updated_by' => $userId,
+            ]);
+        });
+
+        if ($retiredImageDeleteUrl !== null) {
+            DeleteImgbbImageJob::dispatch($retiredImageDeleteUrl);
+        }
 
         $this->notifyIfStockOut($updated, $oldStock, (int) $updated->stock);
 
@@ -165,7 +185,7 @@ class ProductService
     public function delete(\App\Models\Product $product): JsonResponse
     {
         if (!empty($product->image_delete_url)) {
-            $this->imgbb->delete($product->image_delete_url);
+            DeleteImgbbImageJob::dispatch($product->image_delete_url);
         }
 
         $package = $product->package;
@@ -211,15 +231,40 @@ class ProductService
         $this->linkPurchaseItem($data['purchaseItemId'] ?? null, $product->id);
     }
 
-    private function handleImageReplacement(array $data, \App\Models\Product $product): void
+    /**
+     * The delete link of the image this save is throwing away: the one being
+     * replaced, or the one the user just removed. Null when the current image
+     * survives the save.
+     */
+    private function imageDeleteUrlToRetire(array $data, \App\Models\Product $product, bool $removeImage): ?string
     {
-        if (!empty($data['image']) && $data['image'] !== $product->image && !empty($product->image_delete_url)) {
-            try {
-                $this->imgbb->delete($product->image_delete_url, $product->image_delete_hash);
-            } catch (\Throwable $e) {
-                report($e);
-            }
+        if ($removeImage) {
+            return $product->image_delete_url ?: null;
         }
+
+        $incoming = $data['image'] ?? null;
+
+        return (!empty($incoming) && $incoming !== $product->image)
+            ? ($product->image_delete_url ?: null)
+            : null;
+    }
+
+    /**
+     * Only simple/variant products derive their type from their variants.
+     *
+     * Recomputing it from the submitted variants alone demoted every bundle
+     * (whose stock comes from its components, not from the stock column) to
+     * `simple` on its first edit — the client always sends `variants: []` for
+     * a product that has none, so the check saw "no variants" and overwrote
+     * the type.
+     */
+    private function resolveProductType(\App\Models\Product $product, ?array $variants): string
+    {
+        if ($product->product_type === 'bundle' || !empty($product->bundle_components)) {
+            return 'bundle';
+        }
+
+        return !empty($variants) ? 'variant' : 'simple';
     }
 
     private function linkPurchaseItem(?int $purchaseItemId, int $productId): void

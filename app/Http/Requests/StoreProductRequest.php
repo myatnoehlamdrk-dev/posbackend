@@ -16,7 +16,8 @@ class StoreProductRequest extends FormRequest
         return [
             'isSet' => ['nullable', 'boolean'],
             'name' => ['required', 'string', 'max:255'],
-            'image' => ['nullable', 'string'],
+            // Same bound as UpdateProductRequest: the column is VARCHAR(512).
+            'image' => ['nullable', 'string', 'max:512'],
             'imageDeleteUrl' => ['nullable', 'string'],
             'stock' => ['nullable', 'integer'],
             'size' => ['nullable', 'string'],
