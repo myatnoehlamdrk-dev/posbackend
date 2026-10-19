@@ -22,7 +22,21 @@ class PurchaseItemController extends Controller
 
     public function store(StorePurchaseItemRequest $request): JsonResponse
     {
-        return $this->purchaseItemService->create($request->validated(), $request->user()?->id);
+        $user = $request->user();
+        // A row written without a shop would be invisible to the very list
+        // that scopes on shop_id — the exact way items vanished before.
+        // Refuse instead, mirroring the index guard in PurchaseItemService.
+        if ($user?->shop_id === null) {
+            return response()->json([
+                'message' => 'No shop is associated with this account.',
+            ], 403);
+        }
+
+        return $this->purchaseItemService->create(
+            $request->validated(),
+            $user?->id,
+            $user->shop_id,
+        );
     }
 
     public function show(PurchaseItem $purchaseItem): JsonResponse

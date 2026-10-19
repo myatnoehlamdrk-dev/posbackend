@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -9,6 +10,14 @@ use Illuminate\Support\Facades\Log;
 
 class ImgBBService
 {
+    /** Bounded on both ends: how long to wait for the socket, then for the transfer. */
+    protected const CONNECT_TIMEOUT = 5;
+
+    protected const TIMEOUT = 20;
+
+    /** One retry, for transport failures only -- see [upload()]. */
+    protected const UPLOAD_ATTEMPTS = 2;
+
     protected string $apiKey;
 
     protected string $baseUrl;
@@ -22,6 +31,13 @@ class ImgBBService
     /**
      * Upload an image to ImgBB.
      *
+     * ImgBB is the first choice for every image the app stores, so a stalled
+     * host used to stall the save itself: neither timeout was set, and the
+     * logs filled with `cURL error 28` while the request waited. A connection
+     * failure or an ImgBB 5xx is retried once; anything else (a bad key, a
+     * rejected payload) is thrown straight away, because the second attempt
+     * would fail the same way and only add the delay.
+     *
      * @param  UploadedFile|string  $image  An UploadedFile (binary) or a base64/data-URI/remote-URL string.
      * @return array{url: string, display_url: string, delete_url: string, delete_hash: string}
      *
@@ -29,9 +45,44 @@ class ImgBBService
      */
     public function upload(UploadedFile|string $image, ?string $name = null): array
     {
-        $client = Http::acceptJson()->withOptions([
-            'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4],
-        ]);
+        $attempt = 0;
+        $last = null;
+
+        while ($attempt < self::UPLOAD_ATTEMPTS) {
+            $attempt++;
+
+            try {
+                return $this->attemptUpload($image, $name);
+            } catch (\Throwable $e) {
+                $last = $e;
+
+                $retryable = $e instanceof ConnectionException
+                    || ($e instanceof RequestException && $e->response->serverError());
+
+                Log::warning('ImgBB upload attempt failed', [
+                    'attempt' => $attempt,
+                    'retryable' => $retryable,
+                    'error' => $e->getMessage(),
+                ]);
+
+                if (! $retryable) {
+                    break;
+                }
+            }
+        }
+
+        throw $last;
+    }
+
+    /** One attempt, with the timeouts every caller was previously relying on luck for. */
+    protected function attemptUpload(UploadedFile|string $image, ?string $name): array
+    {
+        $client = Http::acceptJson()
+            ->connectTimeout(self::CONNECT_TIMEOUT)
+            ->timeout(self::TIMEOUT)
+            ->withOptions([
+                'curl' => [CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4],
+            ]);
 
         if ($image instanceof UploadedFile) {
             $response = $client
@@ -103,7 +154,12 @@ class ImgBBService
             Log::error('ImgBB image deletion failed', [
                 'delete_hash' => $hash,
                 'error' => $e->getMessage(),
-                'response' => $e->response?->body(),
+                // Only an HTTP failure carries a response. A connection
+                // failure has no ->response, and reading it raised a second
+                // error inside the handler written to contain the first --
+                // which is what those `Undefined property: ...ConnectionException::$response`
+                // log entries were.
+                'response' => $e instanceof RequestException ? $e->response->body() : null,
             ]);
             return false;
         }

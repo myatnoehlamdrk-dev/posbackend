@@ -16,16 +16,28 @@ class PurchaseItemService
 
     public function list(Request $request): JsonResponse
     {
-        $shopId = $request->user()->shop_id;
+        // A token can outlive the shop it was issued for. Without this guard a
+        // null shop_id reached the repository's int-typed parameter and the
+        // request died as a 500 TypeError instead of an answer the client can
+        // act on.
+        $shopId = $request->user()?->shop_id;
+        if ($shopId === null) {
+            return response()->json([
+                'message' => 'No shop is associated with this account.',
+            ], 403);
+        }
+
         $perPage = $request->integer('per_page', 10);
         $items = $this->purchaseItemRepository->list($shopId, $request->input('status'), $perPage);
 
         return response()->json(PurchaseItemResource::collection($items));
     }
 
-    public function create(array $data, ?int $userId): JsonResponse
+    public function create(array $data, ?int $userId, ?int $shopId = null): JsonResponse
     {
-        $purchaseItem = $this->purchaseItemRepository->create($data, $userId, $userId);
+        // The shop id travels with the row from now on: the list scopes on it
+        // directly, so an item can never be written that no session can see.
+        $purchaseItem = $this->purchaseItemRepository->create($data, $userId, $userId, $shopId);
 
         return response()->json(new PurchaseItemResource($purchaseItem), 201);
     }

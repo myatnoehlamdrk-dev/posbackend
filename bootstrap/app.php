@@ -1,8 +1,10 @@
 <?php
 
+use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -13,6 +15,17 @@ return Application::configure(basePath: dirname(__DIR__))
          health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // The framework's default guest redirect is `fn () => route('login')`,
+        // and this app has never had a login route — it is a Flutter client,
+        // not a browser app. That closure is called *while constructing* the
+        // AuthenticationException, so the RouteNotFoundException it threw
+        // escaped first: every unauthenticated API request came back as a 500
+        // with "Route [login] not defined", and the JSON rendering configured
+        // below never got the chance to answer 401. Redirecting guests to the
+        // one web route that exists keeps that construction safe; API requests
+        // do not use it at all, since they are answered with 401 JSON.
+        $middleware->redirectGuestsTo('/');
+
         $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
@@ -40,5 +53,24 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // An expired or missing token on an `api/*` request used to surface as
+        // a 500 -- `Route [login] not defined` -- rather than the 401 it is,
+        // and behind a non-JSON request as an HTML error page. The client is a
+        // Flutter app: it cannot follow a redirect to a form it has no way to
+        // submit, so it needs the JSON 401 it already knows how to parse. The
+        // companion half of this is `redirectGuestsTo('/')` above, which stops
+        // the redirect target itself from throwing before the exception is
+        // even constructed.
+        $exceptions->shouldRenderJsonWhen(
+            static fn (Request $request): bool => $request->is('api/*') || $request->expectsJson(),
+        );
+
+        $exceptions->render(static function (AuthenticationException $e, Request $request) {
+            if ($request->is('api/*')) {
+                return response()->json(['message' => 'Unauthenticated.'], 401);
+            }
+
+            // Not an API call: leave the framework's behaviour alone.
+            return null;
+        });
     })->create();

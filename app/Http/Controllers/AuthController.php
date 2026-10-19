@@ -10,6 +10,7 @@ use App\Mail\ShopOwnerNoticeMail;
 use App\Models\Shop;
 use App\Models\User;
 use App\Rules\MyanmarNrc;
+use App\Services\ImageBudget;
 use App\Services\ImgBBService;
 use App\Services\LoginAttemptService;
 use App\Services\OtpService;
@@ -72,7 +73,11 @@ class AuthController extends Controller
             'shop.type' => ['nullable', 'string', 'max:255'],
             'shop.physicalAddress' => ['nullable', 'string', 'max:255'],
             'shop.logoUrl' => ['nullable', 'string', 'max:1024'],
-            'shop.logoData' => ['nullable', 'string'],
+            // Capped only so a runaway payload is refused with a field error
+            // instead of vanishing into `post_max_size` (an empty body the
+            // validator then reports as "the shop field is required"). The
+            // real budget is applied to the bytes by ImageBudget.
+            'shop.logoData' => ['nullable', 'string', 'max:8000000'],
             'shop.ownerInformation' => ['nullable', 'array'],
             'shop.ownerInformation.name' => ['nullable', 'string', 'max:255'],
             'shop.ownerInformation.email' => ['nullable', 'email', 'max:255'],
@@ -90,7 +95,7 @@ class AuthController extends Controller
         // would keep the users and shops tables locked for the length of the
         // round trip -- or for its timeout, if ImgBB is slow.
         $shopLogo = ($data['shopId'] ?? null) === null && isset($data['shop'])
-            ? $this->resolveShopLogo($data['shop'])
+            ? $this->resolveShopLogo($request, $data['shop'])
             : null;
 
         [$user, $shop] = DB::transaction(function () use ($data, $shopLogo) {
@@ -209,12 +214,33 @@ class AuthController extends Controller
      * back to writing the file locally -- the same fallback
      * `ImageController::store` uses, and the same `/uploads/...` path
      * `resolveMediaUrl` on the client understands.
+     *
+     * $request is carried through only so the local fallback can name the host
+     * the sign-up actually arrived on.
      */
-    private function resolveShopLogo(array $shop): ?string
+    private function resolveShopLogo(Request $request, array $shop): ?string
     {
         $encoded = $shop['logoData'] ?? null;
         if (! is_string($encoded) || $encoded === '') {
             return $shop['logoUrl'] ?? null;
+        }
+
+        // Budget the logo before it leaves this machine. Nothing re-encodes a
+        // stored image afterwards, and the registration screen sends the camera
+        // original -- which is how a 3.4MB shop logo ended up on ImgBB. Bytes
+        // the server cannot decode (an HEIC, say) pass through untouched:
+        // losing the logo is worse than storing an unoptimised one.
+        $decoded = base64_decode($encoded, true);
+        if ($decoded !== false && $decoded !== '') {
+            $fit = ImageBudget::fit($decoded, 'jpg');
+
+            if ($fit['resized']) {
+                Log::info('Registration logo was over the budget; shrinking before upload.', [
+                    'was_bytes' => strlen($decoded),
+                    'stored' => $fit['stored'],
+                ]);
+                $encoded = base64_encode($fit['bytes']);
+            }
         }
 
         try {
@@ -230,16 +256,16 @@ class AuthController extends Controller
             ]);
         }
 
-        return $this->storeLogoLocally($encoded) ?? $shop['logoUrl'] ?? null;
+        return $this->storeLogoLocally($request, $encoded) ?? $shop['logoUrl'] ?? null;
     }
 
     /**
-     * Writes the decoded logo to `public/uploads` and returns its local path.
+     * Writes the decoded logo to `public/uploads` and returns its absolute URL.
      *
      * Returns null rather than throwing when the payload is not usable base64:
      * a logo that cannot be read is not a reason to reject the account.
      */
-    private function storeLogoLocally(string $encoded): ?string
+    private function storeLogoLocally(Request $request, string $encoded): ?string
     {
         $binary = base64_decode($encoded, true);
         if ($binary === false || $binary === '') {
@@ -256,6 +282,19 @@ class AuthController extends Controller
             default => 'png',
         };
 
+        // Usually a no-op by now -- `resolveShopLogo` shrinks the payload
+        // before it is ever encoded -- but this is the last write to disk, so
+        // the budget is asserted here too rather than trusted from upstream.
+        $fit = ImageBudget::fit($binary, $extension);
+        if ($fit['resized']) {
+            Log::info('Registration logo was over the budget; resizing before writing.', [
+                'was_bytes' => strlen($binary),
+                'stored' => $fit['stored'],
+            ]);
+            $binary = $fit['bytes'];
+            $extension = $fit['ext'];
+        }
+
         $directory = public_path('uploads');
         if (! is_dir($directory)) {
             mkdir($directory, 0755, true);
@@ -264,7 +303,12 @@ class AuthController extends Controller
         $filename = uniqid('shop_', true).'.'.$extension;
         file_put_contents($directory.DIRECTORY_SEPARATOR.$filename, $binary);
 
-        return '/uploads/'.$filename;
+        // Absolute: the shop is read back from other devices than the one that
+        // signed up, and they cannot resolve a bare `/uploads/...` unless they
+        // are talking to this exact host. The Flutter client rewrites a stale
+        // host onto its configured origin anyway; this is for every consumer
+        // that has no such rule.
+        return rtrim($request->getSchemeAndHttpHost(), '/').'/uploads/'.$filename;
     }
 
     private function uniqueShopName(string $name): string

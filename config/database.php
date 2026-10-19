@@ -63,6 +63,14 @@ return [
                 (PHP_VERSION_ID >= 80500 ? Mysql::ATTR_SSL_CA : PDO::MYSQL_ATTR_SSL_CA) =>
                     env('MYSQL_ATTR_SSL_CA', base_path('resources/certs/cacert.pem')),
                 PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => env('MYSQL_ATTR_SSL_VERIFY_SERVER_CERT', true),
+                // The database sits on another cloud (TiDB Cloud), so every
+                // fresh PDO connection pays a ~1.5s DNS + TCP + TLS + auth
+                // round trip before the first query. Under `artisan serve`
+                // each HTTP request is its own PHP process, so without this
+                // that cost is charged on every single API call. Persistent
+                // connections hand the next request the previous one's warmed
+                // socket. DB_PERSISTENT=false opts a deployment out.
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', true),
             ]) : [],
         ],
 
