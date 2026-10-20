@@ -63,9 +63,15 @@ return [
     | will be used by the PHP date and date-time functions. The timezone
     | is set to "UTC" by default as it is suitable for most use cases.
     |
+    | Set to Asia/Yangon (UTC+6:30) because that is the wall clock the shops
+    | actually read, and the server was writing UTC: a sale made at 2:25pm was
+    | stored as 07:25 and displayed as "7:25 AM". Rows written before this
+    | change were re-based by the one-off migration in
+    | `database/migrations/2026_10_20_000000_shift_timestamps_to_yangon.php`.
+    |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'Asia/Yangon'),
 
     /*
     |--------------------------------------------------------------------------

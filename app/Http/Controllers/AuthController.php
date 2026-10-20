@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Rules\MyanmarNrc;
 use App\Services\ImageBudget;
 use App\Services\ImgBBService;
+use App\Services\LocalUploads;
 use App\Services\LoginAttemptService;
 use App\Services\OtpService;
 use App\Services\TokenToucher;
@@ -207,15 +208,16 @@ class AuthController extends Controller
      *
      * The logo reaches this endpoint as raw base64 because the authenticated
      * `/images` upload cannot be called before the account exists, so this does
-     * server-side what that endpoint does: hand the bytes to ImgBB and store
-     * the link it returns, which is how every other image in the app is saved.
+     * server-side what that endpoint does. The storage order is the same one
+     * `ImageController::store` uses: this server's own disk first (served
+     * through `/uploads` with CORS, no third-party host involved), and ImgBB
+     * first only under `IMAGES_STORE=imgbb`.
      *
-     * ImgBB being unreachable must not fail a sign-up, so a failed upload falls
-     * back to writing the file locally -- the same fallback
-     * `ImageController::store` uses, and the same `/uploads/...` path
-     * `resolveMediaUrl` on the client understands.
+     * A failed write of either kind must not fail a sign-up, so the last
+     * resort is always the other host -- and if neither takes it, the payload
+     * is dropped rather than the account.
      *
-     * $request is carried through only so the local fallback can name the host
+     * $request is carried through only so the local path can name the host
      * the sign-up actually arrived on.
      */
     private function resolveShopLogo(Request $request, array $shop): ?string
@@ -227,7 +229,7 @@ class AuthController extends Controller
 
         // Budget the logo before it leaves this machine. Nothing re-encodes a
         // stored image afterwards, and the registration screen sends the camera
-        // original -- which is how a 3.4MB shop logo ended up on ImgBB. Bytes
+        // original -- which is how a 3.4MB shop logo ended up on disk. Bytes
         // the server cannot decode (an HEIC, say) pass through untouched:
         // losing the logo is worse than storing an unoptimised one.
         $decoded = base64_decode($encoded, true);
@@ -241,6 +243,15 @@ class AuthController extends Controller
                 ]);
                 $encoded = base64_encode($fit['bytes']);
             }
+        }
+
+        if ((string) config('services.images.store', 'local') !== 'imgbb') {
+            $local = $this->storeLogoLocally($request, $encoded);
+            if ($local !== null) {
+                return $local;
+            }
+
+            Log::warning('Local storage failed for the registration logo; trying ImgBB.');
         }
 
         try {
@@ -260,7 +271,8 @@ class AuthController extends Controller
     }
 
     /**
-     * Writes the decoded logo to `public/uploads` and returns its absolute URL.
+     * Writes the decoded logo to `storage/app/uploads` and returns its absolute
+     * URL.
      *
      * Returns null rather than throwing when the payload is not usable base64:
      * a logo that cannot be read is not a reason to reject the account.
@@ -295,13 +307,15 @@ class AuthController extends Controller
             $extension = $fit['ext'];
         }
 
-        $directory = public_path('uploads');
-        if (! is_dir($directory)) {
-            mkdir($directory, 0755, true);
-        }
+        try {
+            $filename = LocalUploads::store($binary, $extension, 'shop_');
+        } catch (\Throwable $e) {
+            Log::error('Could not write the registration logo to disk', [
+                'error' => $e->getMessage(),
+            ]);
 
-        $filename = uniqid('shop_', true).'.'.$extension;
-        file_put_contents($directory.DIRECTORY_SEPARATOR.$filename, $binary);
+            return null;
+        }
 
         // Absolute: the shop is read back from other devices than the one that
         // signed up, and they cannot resolve a bare `/uploads/...` unless they

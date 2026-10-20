@@ -8,11 +8,11 @@ namespace App\Services;
  * [BUDGET_BYTES] — for the two paths that arrive at the server already
  * encoded and cannot be re-compressed there by anything else.
  *
- * Those two paths are why `public/uploads` grew a 3.4MB registration logo and
- * 300–700KB product fallbacks: the client only skips compression when it
- * cannot decode the file (HEIC and friends), and the ImgBB fallback then wrote
- * whatever it was handed, byte for byte. A server that can decode has no such
- * hole.
+ * Those two paths are why the local uploads directory grew a 3.4MB
+ * registration logo and 300–700KB product fallbacks: the client only skips
+ * compression when it cannot decode the file (HEIC and friends), and the
+ * local write then stored whatever it was handed, byte for byte. A server
+ * that can decode has no such hole.
  *
  * GD does the work, so [available] gates everything: without the extension the
  * input is returned untouched and the caller falls back to rejecting oversized

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ImageBudget;
 use App\Services\ImgBBService;
+use App\Services\LocalUploads;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
@@ -30,6 +31,21 @@ class ImageController extends Controller
         /** @var UploadedFile $file */
         $file = $data['image'];
 
+        // Local first (the default): the shop's images then live on the same
+        // origin that serves the API, which every device in the build is
+        // already reaching — no internet hop, no third-party host that can be
+        // slow or unreachable while the till keeps selling. ImgBB remains the
+        // order of the day under IMAGES_STORE=imgbb, where local storage is
+        // only the fallback it used to be.
+        if ($this->prefersLocal()) {
+            $payload = $this->storeLocally($request, $file, fellBack: false);
+            if ($payload !== null) {
+                return response()->json($payload, 201);
+            }
+
+            Log::warning('Local image storage failed; trying ImgBB instead.');
+        }
+
         try {
             $result = $this->imgbb->upload($this->withinBudget($file), $data['name'] ?? null);
 
@@ -38,56 +54,87 @@ class ImageController extends Controller
                 'display_url' => $result['display_url'],
                 'delete_url' => $result['delete_url'],
                 // The bytes went to ImgBB's CDN; nothing is written to this
-                // machine's `public/uploads`, so deleting the local file is
-                // not what removes the image. Surfaced so the client can tell
-                // the user the photo was *not* kept locally.
+                // machine's storage, so deleting a local file is not what
+                // removes the image.
                 'stored_locally' => false,
+                // ImgBB was the primary host and it took the bytes: nothing
+                // degraded, so the client has nothing to warn about.
+                'fallback' => false,
             ], 201);
         } catch (\Throwable $e) {
-            // ImgBB unreachable/invalid: fall back to local storage so the
-            // image is still saved and a usable URL is returned.
             Log::warning('ImgBB upload failed; falling back to local storage', [
                 'error' => $e->getMessage(),
             ]);
 
-            // Compressed here, not just moved: this is the path that grew
-            // `public/uploads` with 300KB–3.4MB files. It is reached exactly
-            // when the client could not compress the image itself (an
-            // undecodable format such as HEIC), so the server is the last
-            // place the budget can be applied.
+            $payload = $this->storeLocally($request, $file, fellBack: true);
+            if ($payload !== null) {
+                return response()->json($payload, 201);
+            }
+
+            // Neither host could take the image: surface the original
+            // failure rather than a disk error nobody can act on.
+            throw $e;
+        }
+    }
+
+    /** Whether this server's own disk is the primary home for uploads. */
+    private function prefersLocal(): bool
+    {
+        return (string) config('services.images.store', 'local') !== 'imgbb';
+    }
+
+    /**
+     * Budgets the file, writes it under `storage/app/uploads` and builds the
+     * response payload. Null when the bytes could not be written — the caller
+     * then decides which host to try next.
+     *
+     * `$fellBack` marks the legacy path (the primary host failed and local
+     * storage caught it). It is the signal the client's "saved on this server
+     * only" warning rides on: under local-first storage, keeping the photo on
+     * this server is the plan, not a degradation, and warning about every
+     * upload would train the warning away.
+     */
+    private function storeLocally(Request $request, UploadedFile $file, bool $fellBack): ?array
+    {
+        try {
+            // Compressed here, not just moved: this path can carry a file the
+            // client could not compress itself (an undecodable format such as
+            // HEIC), so the server is the last place the budget can be applied.
             $bytes = (string) file_get_contents($file->getRealPath());
             $fit = ImageBudget::fit($bytes, $this->extensionOf($file));
 
-            $dir = public_path('uploads');
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-            $filename = uniqid('img_', true) . '.' . $fit['ext'];
-            file_put_contents($dir . DIRECTORY_SEPARATOR . $filename, $fit['bytes']);
-
-            // Absolute, not `/uploads/...`: the device that fetches this later
-            // is usually not the one holding the file (the database is shared,
-            // `public/uploads` is not), and every consumer without the
-            // Flutter client's URL rewriting -- the PDF renderer, a browser,
-            // curl -- would otherwise be handed a path that only resolves from
-            // inside this machine.
-            $url = rtrim($request->getSchemeAndHttpHost(), '/') . '/uploads/' . $filename;
+            $filename = LocalUploads::store($fit['bytes'], $fit['ext']);
 
             if ($fit['resized']) {
-                Log::info('Local image fallback resized to the budget.', [
+                Log::info('Local image was over the budget; resized before writing.', [
                     'stored' => $fit['stored'],
                     'was_bytes' => strlen($bytes),
                 ]);
             }
 
-            return response()->json([
+            // Absolute, not `/uploads/...`: consumers without the Flutter
+            // client's URL rewriting (the PDF renderer, a browser, curl) would
+            // otherwise be handed a path that only resolves from inside this
+            // machine. The client rewrites the host onto its configured
+            // origin anyway; this is for everyone else.
+            $url = rtrim($request->getSchemeAndHttpHost(), '/').'/uploads/'.$filename;
+
+            return [
                 'url' => $url,
                 'display_url' => $url,
                 'delete_url' => '',
-                // This is the case the warning exists for: the bytes are on
-                // this machine only, and live only as long as it does.
+                // The bytes are on this server's disk. Reachable by every
+                // device that talks to this origin — see the route in
+                // routes/web.php for how they get the CORS header.
                 'stored_locally' => true,
-            ], 201);
+                'fallback' => $fellBack,
+            ];
+        } catch (\Throwable $e) {
+            Log::error('Local image storage failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
         }
     }
 

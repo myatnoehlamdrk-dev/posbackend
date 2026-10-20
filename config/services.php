@@ -40,4 +40,19 @@ return [
         'base_url' => env('IMGBB_BASE_URL', 'https://api.imgbb.com/1/upload'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Uploaded image storage
+    |--------------------------------------------------------------------------
+    |
+    | 'local' (default) keeps every upload on this server's disk and serves it
+    | through /uploads with CORS — reachable by every device that already
+    | reaches the API, with no third-party host in the loop. 'imgbb' restores
+    | the old preference: ImgBB first, local disk only as the fallback.
+    |
+    */
+    'images' => [
+        'store' => env('IMAGES_STORE', 'local'),
+    ],
+
 ];
