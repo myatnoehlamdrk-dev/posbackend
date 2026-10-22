@@ -38,8 +38,9 @@ services:
       - key: APP_KEY
         sync: false # paste: base64:yk0fsW0lJL9JPGQiEbArXMNh/Mgo2vZYRwawTRz5wnc=
       - key: APP_URL
-        # UPDATE to your real service URL after the first deploy.
-        value: https://posbackend.onrender.com
+        # Service URL assigned by Render; used for absolute links (PDF
+        # vouchers, emails). BASE_URL on the Flutter side is set separately.
+        value: https://mdrkposbackend.onrender.com
       - key: APP_TIMEZONE
         value: Asia/Yangon
       - key: APP_LOCALE
