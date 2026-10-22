@@ -1,0 +1,129 @@
+# Render blueprint for the Laravel API.
+#
+# Render has NO native PHP runtime (native = Node/Bun, Python, Ruby, Go, Rust,
+# Elixir), so this service runs on `runtime: docker` and builds ./Dockerfile.
+#
+# Deploy: Render dashboard -> New -> Blueprint -> connect this GitHub repo.
+# Values marked `sync: false` are secrets: Render prompts for them, or you set
+# them under Environment after the service exists.
+#
+# MYSQL_ATTR_SSL_CA is deliberately NOT set. config/database.php falls back to
+# base_path('resources/certs/cacert.pem'), which is inside the image. The .env
+# value on your Windows box is an absolute D:/... path that does not exist on
+# Linux and would break every connection.
+#
+# LOG_DEPRECATIONS_CHANNEL and SESSION_DOMAIN are also omitted: YAML reads an
+# unquoted `null` as a null value rather than the string "null", and Laravel's
+# defaults already match what .env sets.
+
+services:
+  - type: web
+    name: posbackend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # Runs in a fresh container built from the same image, before the new
+    # version starts taking traffic -- migrations land before the switchover.
+    preDeployCommand: php artisan migrate --force
+    healthCheckPath: /up
+    envVars:
+      # --- Application ---
+      - key: APP_NAME
+        value: Inventory
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        sync: false # paste: base64:yk0fsW0lJL9JPGQiEbArXMNh/Mgo2vZYRwawTRz5wnc=
+      - key: APP_URL
+        # UPDATE to your real service URL after the first deploy.
+        value: https://posbackend.onrender.com
+      - key: APP_TIMEZONE
+        value: Asia/Yangon
+      - key: APP_LOCALE
+        value: en
+      - key: APP_FALLBACK_LOCALE
+        value: en
+      - key: APP_FAKER_LOCALE
+        value: en_US
+      - key: APP_MAINTENANCE_DRIVER
+        value: file
+
+      # --- Logging ---
+      - key: LOG_CHANNEL
+        value: stack
+      - key: LOG_STACK
+        value: single
+      - key: LOG_LEVEL
+        value: info
+
+      # --- Database (TiDB Cloud, verified publicly reachable from EU/SE/SG) ---
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        value: gateway01.ap-southeast-1.prod.aws.tidbcloud.com
+      - key: DB_PORT
+        value: "4000"
+      - key: DB_DATABASE
+        value: inventory_manage_sys
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_PERSISTENT
+        value: "true"
+      - key: MYSQL_ATTR_SSL_VERIFY_SERVER_CERT
+        value: "true"
+
+      # --- Sessions / cache / queue ---
+      - key: SESSION_DRIVER
+        value: file
+      - key: SESSION_LIFETIME
+        value: "120"
+      - key: SESSION_ENCRYPT
+        value: "false"
+      - key: SESSION_PATH
+        value: /
+      - key: CACHE_STORE
+        value: file
+      # Free tier runs one service, so jobs execute inside the request instead
+      # of needing a second (paid) queue-worker service.
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: BROADCAST_CONNECTION
+        value: log
+      - key: FILESYSTEM_DISK
+        value: local
+
+      # --- Mail (gmail smtp, same as .env) ---
+      - key: MAIL_MAILER
+        value: smtp
+      - key: MAIL_HOST
+        value: smtp.gmail.com
+      - key: MAIL_PORT
+        value: "587"
+      - key: MAIL_ENCRYPTION
+        value: tls
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: MAIL_FROM_ADDRESS
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: Inventory
+
+      # --- Third-party keys ---
+      - key: IMGBB_API_KEY
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+
+      # --- Runtime ---
+      # `php artisan serve` only honours this without the --no-reload flag
+      # (see the CMD in Dockerfile); without workers every request would queue
+      # behind a single process.
+      - key: PHP_CLI_SERVER_WORKERS
+        value: "8"

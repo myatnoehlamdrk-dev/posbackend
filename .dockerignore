@@ -1,0 +1,34 @@
+# Never ship the developer machine into the image.
+.git
+.github
+.history
+.idea
+.vscode
+*.log
+
+# Secrets: Render injects these as environment variables instead.
+.env
+.env.*
+auth.json
+
+# Built by the host, rebuilt inside the image.
+vendor
+node_modules
+public/build
+public/hot
+public/storage
+
+# Runtime state: created empty and made writable by the Dockerfile.
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/testing/*
+storage/framework/views/*
+bootstrap/cache/*.php
+
+# Not needed in a production image.
+tests
+phpunit.xml
+package-lock.json
+*.md
+render.yaml
