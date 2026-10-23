@@ -23,26 +23,57 @@ class FcmService
         $data = $this->credentialsFromEnv();
 
         if ($data === null) {
-            $path = storage_path('app/firebase-credentials.json');
-            if (!file_exists($path)) {
-                Log::warning(
-                    'FCM credentials missing: FCM_CREDENTIALS is unset and ' . $path . ' does not exist'
-                );
+            foreach ($this->credentialFiles() as $path) {
+                if (!file_exists($path)) {
+                    continue;
+                }
 
-                return;
+                $decoded = json_decode((string) file_get_contents($path), true);
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    Log::warning('Invalid Firebase credentials JSON in ' . $path);
+
+                    continue;
+                }
+
+                $data = $decoded;
+                break;
             }
+        }
 
-            $data = json_decode((string) file_get_contents($path), true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::warning('Invalid Firebase credentials JSON in ' . $path);
+        if ($data === null) {
+            Log::warning(
+                'FCM credentials missing: FCM_CREDENTIALS is unset and none of these exist: '
+                . implode(', ', $this->credentialFiles())
+            );
 
-                return;
-            }
+            return;
         }
 
         $this->projectId = $data['project_id'] ?? null;
         $this->clientEmail = $data['client_email'] ?? null;
         $this->privateKey = $data['private_key'] ?? null;
+    }
+
+    /**
+     * Where the service-account JSON may live on disk, most likely first.
+     *
+     * The key must never be in the repo — this one is PUBLIC and GitHub push
+     * protection refuses a commit carrying it (GH013) — so on Render it is
+     * delivered either as an FCM_CREDENTIALS env var (see credentialsFromEnv)
+     * or as a Render Secret File, which is written either to the destination
+     * path chosen in the dashboard or, at its default, under /etc/secrets.
+     * Probing both means the dashboard choice needs no code change.
+     *
+     * storage/app/ is where local development keeps the same file; it is
+     * git-ignored by storage/app/.gitignore, so it never leaves this machine.
+     */
+    private function credentialFiles(): array
+    {
+        return [
+            storage_path('app/firebase-credentials.json'),
+            '/etc/secrets/firebase-credentials.json',
+            base_path('firebase-credentials.json'),
+        ];
     }
 
     /**
