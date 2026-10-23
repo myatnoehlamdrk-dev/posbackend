@@ -32,6 +32,13 @@ WORKDIR /var/www/html
 # Everything must be present before `composer install`: the post-autoload-dump
 # script runs `php artisan package:discover`, which boots the application.
 COPY . .
+
+# FcmService reads storage/app/firebase-credentials.json, but storage/app/.gitignore
+# ("*") keeps that file out of git -- so the Render image, built from the repo, has no
+# key at that path and EVERY push fails silently with "credentials file not found".
+# The service-account key is already committed at repo root, so copy it to the path the
+# code expects. If the key is rotated, the downloaded filename changes: update this line.
+COPY pos-for-small-business-firebase-adminsdk-fbsvc-85bed3502b.json storage/app/firebase-credentials.json
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress \
     && mkdir -p storage/framework/cache storage/framework/sessions \
                 storage/framework/views storage/logs bootstrap/cache \
