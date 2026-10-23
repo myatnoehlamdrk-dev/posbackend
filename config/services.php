@@ -42,6 +42,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Firebase Cloud Messaging
+    |--------------------------------------------------------------------------
+    |
+    | Base64 of the service-account JSON. Read through config rather than env()
+    | directly so it survives `config:cache`.
+    |
+    | It lives here and not in a committed file because this repository is
+    | public: a private key committed to it would be world-readable, and GitHub
+    | push protection rejects such a commit (GH013) before it can even be
+    | pushed. When unset — local development — FcmService falls back to the
+    | git-ignored storage/app/firebase-credentials.json.
+    |
+    */
+    'fcm' => [
+        'credentials' => env('FCM_CREDENTIALS'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Uploaded image storage
     |--------------------------------------------------------------------------
     |

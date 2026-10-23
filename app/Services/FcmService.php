@@ -20,21 +20,64 @@ class FcmService
 
     private function loadCredentials(): void
     {
-        $path = storage_path('app/firebase-credentials.json');
-        if (!file_exists($path)) {
-            Log::warning('Firebase credentials file not found at ' . $path);
-            return;
-        }
+        $data = $this->credentialsFromEnv();
 
-        $data = json_decode(file_get_contents($path), true);
-        if (json_last_error() !== JSON_ERROR_NONE) {
-            Log::warning('Invalid Firebase credentials JSON');
-            return;
+        if ($data === null) {
+            $path = storage_path('app/firebase-credentials.json');
+            if (!file_exists($path)) {
+                Log::warning(
+                    'FCM credentials missing: FCM_CREDENTIALS is unset and ' . $path . ' does not exist'
+                );
+
+                return;
+            }
+
+            $data = json_decode((string) file_get_contents($path), true);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                Log::warning('Invalid Firebase credentials JSON in ' . $path);
+
+                return;
+            }
         }
 
         $this->projectId = $data['project_id'] ?? null;
         $this->clientEmail = $data['client_email'] ?? null;
         $this->privateKey = $data['private_key'] ?? null;
+    }
+
+    /**
+     * The service-account key arrives as the FCM_CREDENTIALS env var — base64
+     * of the JSON (raw JSON is accepted too, but the private key's newlines
+     * make that awkward to paste into an env-var UI).
+     *
+     * It cannot be committed instead: this repo is PUBLIC, so a private key in
+     * it would be world-readable, and GitHub's push protection blocks the
+     * commit outright (GH013, "Google Cloud Service Account Credentials").
+     *
+     * Returns null when the variable is unset — or unparsable, so a typo falls
+     * back rather than blanking the config — leaving local development on
+     * storage/app/firebase-credentials.json, which stays git-ignored.
+     */
+    private function credentialsFromEnv(): ?array
+    {
+        $raw = trim((string) config('services.fcm.credentials', ''));
+        if ($raw === '') {
+            return null;
+        }
+
+        $decoded = base64_decode($raw, true);
+        if ($decoded !== false) {
+            $raw = $decoded;
+        }
+
+        $data = json_decode($raw, true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Log::warning('FCM_CREDENTIALS is set but is not valid JSON: ' . json_last_error_msg());
+
+            return null;
+        }
+
+        return $data;
     }
 
     private function getAccessToken(): ?string

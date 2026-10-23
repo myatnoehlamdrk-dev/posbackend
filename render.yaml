@@ -121,6 +121,12 @@ services:
         sync: false
       - key: RESEND_API_KEY
         sync: false
+      # Base64 of the Firebase service-account JSON. Must be a secret, never a
+      # committed file: this repo is PUBLIC and GitHub push protection refuses
+      # commits carrying a Google service-account key (GH013). Generate with:
+      #   php -r "echo base64_encode(file_get_contents('storage/app/firebase-credentials.json'));"
+      - key: FCM_CREDENTIALS
+        sync: false
 
       # --- Runtime ---
       # `php artisan serve` only honours this without the --no-reload flag
