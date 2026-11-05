@@ -23,7 +23,13 @@ class DashboardController extends Controller
     public function salesChart(Request $request): JsonResponse
     {
         $days = $request->integer('days', 7);
-        return response()->json($this->dashboardService->getSalesChart($days));
+
+        // The service takes (shopId, days); passing $days alone would send the
+        // requested window in as the shop id and fall back to a 7-day range on
+        // somebody else's shop.
+        return response()->json(
+            $this->dashboardService->getSalesChart($request->user()->shop_id, $days),
+        );
     }
 
     public function topProducts(Request $request): JsonResponse
