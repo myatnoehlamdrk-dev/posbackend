@@ -14,6 +14,7 @@ interface DashboardRepositoryInterface
     public function getTotalProducts(int $shopId, int $userId): int;
     public function getInStockCount(int $shopId, int $userId): int;
     public function getLowStockCount(int $shopId, int $userId): int;
+    public function getStockUnits(int $shopId, int $userId): int;
     public function getPendingPurchases(int $shopId): int;
     public function getAllTimeSales(int $shopId): int;
     public function getSalesChart(int $shopId, int $days = 7): array;

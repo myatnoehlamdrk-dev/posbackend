@@ -75,6 +75,12 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
             ->count();
     }
 
+    public function getStockUnits(int $shopId, int $userId): int
+    {
+        return (int) $this->scopedProducts($shopId, $userId)
+            ->sum(fn (Product $product) => $product->getAvailableStock());
+    }
+
     public function getPendingPurchases(int $shopId): int
     {
         return PurchaseItem::where('status', 'pending')

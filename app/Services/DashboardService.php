@@ -42,6 +42,7 @@ class DashboardService
                 'total_products' => $this->dashboardRepository->getTotalProducts($shopId, $userId),
                 'in_stock' => $this->dashboardRepository->getInStockCount($shopId, $userId),
                 'low_stock_count' => $this->dashboardRepository->getLowStockCount($shopId, $userId),
+                'stock_units' => $this->dashboardRepository->getStockUnits($shopId, $userId),
                 'pending_purchases' => $this->dashboardRepository->getPendingPurchases($shopId),
                 'total_sales' => $this->dashboardRepository->getAllTimeSales($shopId),
                 'total_categories' => $this->dashboardRepository->getTotalCategories($shopId, $userId),

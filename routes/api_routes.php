@@ -35,7 +35,8 @@ if (! function_exists('pos_define_api_routes')) {
             Route::get('products/search', [App\Http\Controllers\ProductController::class, 'search']);
             Route::get('products/latest', [App\Http\Controllers\ProductController::class, 'latest']);
             Route::apiResource('products', App\Http\Controllers\ProductController::class);
-            Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
+            Route::apiResource('inventory-stores', App\Http\Controllers\InventoryStoreController::class);
+            Route::post('inventory-stores/{inventory_store}/adjust', [App\Http\Controllers\InventoryStoreController::class, 'adjust']);
             Route::get('categories/with-products', [App\Http\Controllers\CategoryController::class, 'withProducts']);
             Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
             Route::apiResource('sales', App\Http\Controllers\SaleController::class);
@@ -57,7 +58,6 @@ if (! function_exists('pos_define_api_routes')) {
             Route::patch('sales/{sale}', [App\Http\Controllers\SaleController::class, 'update']);
             Route::patch('orders/{order}', [App\Http\Controllers\OrderController::class, 'update']);
             Route::patch('customers/{customer}', [App\Http\Controllers\CustomerController::class, 'update']);
-            Route::patch('inventories/{inventory}', [App\Http\Controllers\InventoryController::class, 'update']);
             Route::patch('settings', [App\Http\Controllers\SettingController::class, 'update']);
             Route::patch('auth/profile', [App\Http\Controllers\ProfileController::class, 'update']);
             Route::prefix('stock-alerts')->group(function () {
