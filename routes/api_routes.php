@@ -48,9 +48,11 @@ if (! function_exists('pos_define_api_routes')) {
             Route::get('finance/monthly-report', [App\Http\Controllers\FinanceReportController::class, 'monthly']);
             Route::get('operation-fees', [App\Http\Controllers\OperationFeeController::class, 'index']);
             Route::post('operation-fees', [App\Http\Controllers\OperationFeeController::class, 'store']);
-            Route::put('operation-fees/{operation_fee}', [App\Http\Controllers\OperationFeeController::class, 'update']);
-            Route::delete('operation-fees/{operation_fee}', [App\Http\Controllers\OperationFeeController::class, 'destroy']);
+            Route::get('operation-fees/report', [App\Http\Controllers\OperationFeeController::class, 'report']);
+            Route::get('operation-fees/settings', [App\Http\Controllers\OperationFeeController::class, 'settings']);
             Route::put('operation-fees/settings', [App\Http\Controllers\OperationFeeController::class, 'updateSettings']);
+            Route::put('operation-fees/{fee}', [App\Http\Controllers\OperationFeeController::class, 'update']);
+            Route::delete('operation-fees/{fee}', [App\Http\Controllers\OperationFeeController::class, 'destroy']);
             Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
             Route::put('settings', [App\Http\Controllers\SettingController::class, 'update']);
             Route::apiResource('feedback', App\Http\Controllers\FeedbackController::class)->only(['index', 'store', 'show', 'destroy']);

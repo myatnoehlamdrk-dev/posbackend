@@ -9,8 +9,6 @@ class OperationFee extends Model
 {
     protected $fillable = [
         'shop_id',
-        'month',
-        'year',
         'name',
         'category',
         'calculation',

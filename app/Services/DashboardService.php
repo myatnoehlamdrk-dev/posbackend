@@ -15,6 +15,7 @@ class DashboardService
 
     public function __construct(
         protected DashboardRepositoryInterface $dashboardRepository,
+        protected OperationFeeService $operationFeeService,
     ) {}
 
     public static function bust(): void
@@ -103,7 +104,9 @@ class DashboardService
 
     public function getMonthlySales(int $shopId, int $year): array
     {
-        return $this->dashboardRepository->getMonthlySales($shopId, $year);
+        $months = $this->dashboardRepository->getMonthlySales($shopId, $year);
+
+        return $this->operationFeeService->attachMonthlyCosts($shopId, $year, $months);
     }
 
     public function getLeastProducts(int $shopId, int $limit = 3): array
