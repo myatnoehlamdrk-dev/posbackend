@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -38,6 +39,16 @@ class Sale extends Model
         'grand_total' => 'integer',
         'discount' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        // The dashboard caches its monthly revenue and order figures. A sale
+        // edit can change those without touching a product row (products bust
+        // the cache through their stock updates), so bust here too.
+        static::created(fn () => DashboardService::bust());
+        static::updated(fn () => DashboardService::bust());
+        static::deleted(fn () => DashboardService::bust());
+    }
 
     public function user(): BelongsTo
     {

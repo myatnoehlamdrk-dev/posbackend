@@ -71,6 +71,11 @@ trait DashboardTableQueries
      * products. Filtering happens per product, before the split, so that the
      * table still answers "which products are low on stock" rather than
      * "which variants happen to be under the line".
+     *
+     * The two stock tables are exclusive tiers, matching the status card:
+     * the In Stock table is everything above the low-stock line and the Low
+     * Stock table is the 1..threshold band. Out-of-stock products appear in
+     * neither.
      */
     public function paginateStockTable(
         int $shopId,
@@ -84,7 +89,9 @@ trait DashboardTableQueries
             ->filter(function (Product $product) use ($lowOnly) {
                 $stock = $product->getAvailableStock();
 
-                return $stock > 0 && (!$lowOnly || $stock <= self::LOW_STOCK_THRESHOLD);
+                return $lowOnly
+                    ? $stock > 0 && $stock <= self::LOW_STOCK_THRESHOLD
+                    : $stock > self::LOW_STOCK_THRESHOLD;
             })
             ->values();
 

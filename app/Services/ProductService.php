@@ -219,6 +219,9 @@ class ProductService
             }
         }
 
+        // An explicit cost wins; otherwise the first variant's cost is used as
+        // the product fallback — but only when the product has no cost yet, so
+        // restocking an old product never zeroes what is already stored.
         if ($variants !== null) {
             $existingVariants = $product->variants ?? [];
             $mergedVariants = array_merge($existingVariants, $variants);

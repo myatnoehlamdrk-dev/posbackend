@@ -208,10 +208,10 @@ class AuthController extends Controller
      *
      * The logo reaches this endpoint as raw base64 because the authenticated
      * `/images` upload cannot be called before the account exists, so this does
-     * server-side what that endpoint does. The storage order is the same one
-     * `ImageController::store` uses: this server's own disk first (served
-     * through `/uploads` with CORS, no third-party host involved), and ImgBB
-     * first only under `IMAGES_STORE=imgbb`.
+     * server-side what that endpoint does. The storage order matches
+     * `ImageController::store`: ImgBB first whenever it is the configured
+     * store (the default when a key exists), with this server's own disk as
+     * the fallback that keeps a sign-up alive when the CDN is unreachable.
      *
      * A failed write of either kind must not fail a sign-up, so the last
      * resort is always the other host -- and if neither takes it, the payload

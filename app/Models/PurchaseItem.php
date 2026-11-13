@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -32,6 +33,16 @@ class PurchaseItem extends Model
         'unit_price' => 'integer',
         'total_price' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        // A receipt linked to a product changes the stock that product held at
+        // the end of last month, which the dashboard's low-stock comparison
+        // reconstructs and caches.
+        static::created(fn () => DashboardService::bust());
+        static::updated(fn () => DashboardService::bust());
+        static::deleted(fn () => DashboardService::bust());
+    }
 
     public function user(): BelongsTo
     {

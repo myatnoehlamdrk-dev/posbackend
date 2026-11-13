@@ -29,6 +29,7 @@ class StoreProductRequest extends FormRequest
             'variants.*.color' => ['nullable', 'string'],
             'variants.*.quantity' => ['nullable', 'integer'],
             'variants.*.price' => ['nullable', 'numeric'],
+            'variants.*.costPrice' => ['nullable', 'numeric', 'min:0'],
             'supplierId' => ['nullable', 'integer', 'exists:suppliers,id'],
             'supplierName' => ['nullable', 'string', 'max:255'],
             'supplierContact' => ['nullable', 'string', 'max:255'],

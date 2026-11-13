@@ -31,12 +31,35 @@ interface DashboardRepositoryInterface
     // Catalog, stock-tier and cart/sales summaries that back the extra rows of
     // KPI cards on the dashboard.
     public function getTotalCategories(int $shopId, int $userId): int;
+
+    /** Units sold across all time — the "Total Items Sold" figure. */
+    public function getAllTimeItemsSold(int $shopId): int;
     public function getTotalPackages(int $shopId, int $userId): int;
     public function getBrandCount(int $shopId, int $userId): int;
     public function getCategorylessProductCount(int $shopId, int $userId): int;
 
     /** @return array{high:int,mid:int,low:int,out:int} */
     public function getStockTierCounts(int $shopId, int $userId): array;
+
+    /**
+     * Active packages bucketed by the stock they actually hold (the summed
+     * available stock of their products).
+     *
+     * @return array{total:int,in_stock:int,low:int,out:int}
+     */
+    public function getPackageStockTierCounts(int $shopId, int $userId): array;
+
+    /**
+     * Calendar month-over-month figures for the dashboard's headline cards.
+     *
+     * Each figure is `['current' => ..., 'previous' => ...]`, where "current"
+     * is the calendar month so far and "previous" is the whole preceding
+     * calendar month. The two series hold one entry per elapsed day of the
+     * current month, oldest first, so a tile's sparkline is real data too.
+     *
+     * @return array<string, mixed>
+     */
+    public function getMonthlyComparison(int $shopId, int $userId): array;
 
     public function getInCartCount(int $shopId): int;
     public function getSalesCount(int $shopId): int;
