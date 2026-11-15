@@ -122,6 +122,41 @@ class OperationFeeController extends Controller
         }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
+    /**
+     * Real per-product allocation preview for the selected month and method.
+     */
+    public function productImpact(Request $request): JsonResponse
+    {
+        $shopId = $request->user()->shop_id;
+        $year = $request->integer('year', (int) date('Y'));
+        $month = $request->integer('month', (int) date('n'));
+
+        $allowed = ['revenue', 'unitsSold', 'grossProfit'];
+        $method = (string) $request->input(
+            'allocationMethod',
+            $this->service->getSettings($shopId)->allocation_method,
+        );
+
+        if (! in_array($method, $allowed, true)) {
+            $method = 'revenue';
+        }
+
+        $sales = collect($this->dashboardService->getMonthlySales($shopId, $year));
+        $monthData = $sales->firstWhere('month', $month) ?? [];
+
+        $productId = $request->integer('productId');
+
+        return response()->json($this->service->productImpact(
+            $shopId,
+            $year,
+            $month,
+            $method,
+            (float) ($monthData['total'] ?? 0),
+            (int) ($monthData['transactions'] ?? 0),
+            $productId > 0 ? $productId : null,
+        ));
+    }
+
     public function settings(Request $request): JsonResponse
     {
         $settings = $this->service->getSettings($request->user()->shop_id);
