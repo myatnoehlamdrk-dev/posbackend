@@ -48,12 +48,16 @@ class ShopOwnerNoticeMail extends Mailable
     /**
      * The address to report an unwanted listing to.
      *
-     * Read from the mailer's own from-address rather than hardcoded, so the
-     * contact line cannot drift away from the mailbox that actually exists.
+     * Configured separately from the from-address so a no-reply sender does
+     * not become the only address a worried owner can write to. Falls back to
+     * the from-address, where the two are the same mailbox.
      */
     private function contactAddress(): string
     {
-        return (string) config('mail.from.address', 'hello@example.com');
+        return (string) config(
+            'mail.contact.address',
+            config('mail.from.address', 'hello@example.com'),
+        );
     }
 
     private function buildHtml(): string

@@ -124,16 +124,47 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
 
     public function getTopProducts(int $shopId, int $limit = 5): array
     {
+        return $this->soldProducts($shopId, $limit, 'desc');
+    }
+
+    public function getLeastProducts(int $shopId, int $limit = 3): array
+    {
+        return $this->soldProducts($shopId, $limit, 'asc');
+    }
+
+    /**
+     * Units sold per product in this shop over the last 30 days, in the given
+     * direction: `desc` is most bought, `asc` is least bought.
+     *
+     * Scoped through the sale's owner (`sales.user_id → users.shop_id`) rather
+     * than through the product's package → category → inventory chain. A
+     * quick-added product has no package, and the inner joins to `packages`
+     * dropped it entirely — which is how a shop's best-selling item could be
+     * missing from "Most Bought" while its sales were counted everywhere else.
+     *
+     * Grouped by product id, not name: two different products that happen to
+     * share a name were being folded into one row, showing one name with the
+     * other's quantity. `products.active` matches the all-time table behind
+     * "View all", so the card and the table never disagree about which
+     * products exist.
+     */
+    private function soldProducts(int $shopId, int $limit, string $direction): array
+    {
         return DB::table('sale_items')
+            ->join('sales', 'sale_items.sale_id', '=', 'sales.id')
+            ->join('users', 'sales.user_id', '=', 'users.id')
             ->join('products', 'sale_items.product_id', '=', 'products.id')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
+            ->where('users.shop_id', $shopId)
+            ->where('products.active', true)
             ->where('sale_items.created_at', '>=', Carbon::now()->subDays(30))
-            ->where('inventories.shop_id', $shopId)
-            ->select('products.name as product_name', 'products.image as product_image', DB::raw('SUM(sale_items.quantity) as total_quantity'))
-            ->groupBy('products.name', 'products.image')
-            ->orderByDesc('total_quantity')
+            ->select(
+                'products.id as product_id',
+                'products.name as product_name',
+                'products.image as product_image',
+                DB::raw('SUM(sale_items.quantity) as total_quantity'),
+            )
+            ->groupBy('products.id', 'products.name', 'products.image')
+            ->orderBy('total_quantity', $direction)
             ->limit($limit)
             ->get()
             ->toArray();
@@ -800,23 +831,6 @@ class EloquentDashboardRepository implements DashboardRepositoryInterface
         }
 
         return $months;
-    }
-
-    public function getLeastProducts(int $shopId, int $limit = 3): array
-    {
-        return DB::table('sale_items')
-            ->join('products', 'sale_items.product_id', '=', 'products.id')
-            ->join('packages', 'products.package_id', '=', 'packages.id')
-            ->join('categories', 'packages.category_id', '=', 'categories.id')
-            ->join('inventories', 'categories.inventory_id', '=', 'inventories.id')
-            ->where('sale_items.created_at', '>=', Carbon::now()->subDays(30))
-            ->where('inventories.shop_id', $shopId)
-            ->select('products.name as product_name', 'products.image as product_image', DB::raw('SUM(sale_items.quantity) as total_quantity'))
-            ->groupBy('products.name', 'products.image')
-            ->orderBy('total_quantity')
-            ->limit($limit)
-            ->get()
-            ->toArray();
     }
 
     /**

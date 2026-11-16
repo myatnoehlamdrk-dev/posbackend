@@ -161,13 +161,23 @@ class AuthController extends Controller
         // EmailVerificationController. Previously written to
         // `password_reset_tokens` alongside password-reset codes, so the two
         // flows for one address overwrote each other. Deliberately outside the
-        // transaction: a mail server that cannot be reached must not roll back
-        // an account that was otherwise created.
-        $this->otp->send(
-            $user->email,
-            OtpService::VERIFICATION_TABLE,
-            new OtpMail(OtpMail::PURPOSE_VERIFICATION),
-        );
+        // transaction and caught: a mail provider that cannot be reached must
+        // not roll back -- or 500 -- an account that was otherwise created.
+        // The client still opens the verify screen, where "Resend" reports a
+        // send failure it actually sees instead of leaving a dead form.
+        try {
+            $this->otp->send(
+                $user->email,
+                OtpService::VERIFICATION_TABLE,
+                new OtpMail(OtpMail::PURPOSE_VERIFICATION),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Verification OTP failed to send after registration.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Heads-up to the shop's owner address, which belongs to the shop and
         // not to the account: `shop.ownerInformation.email` is a free-typed
