@@ -98,19 +98,9 @@ services:
       - key: FILESYSTEM_DISK
         value: local
 
-      # --- Mail (gmail smtp, same as .env) ---
+      # --- Mail (Resend over HTTPS; SMTP ports are blocked on Render free tier) ---
       - key: MAIL_MAILER
-        value: smtp
-      - key: MAIL_HOST
-        value: smtp.gmail.com
-      - key: MAIL_PORT
-        value: "587"
-      - key: MAIL_ENCRYPTION
-        value: tls
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
-        sync: false
+        value: resend
       - key: MAIL_FROM_ADDRESS
         sync: false
       - key: MAIL_FROM_NAME
