@@ -31,12 +31,10 @@ class ImageController extends Controller
         /** @var UploadedFile $file */
         $file = $data['image'];
 
-        // Local first (the default): the shop's images then live on the same
-        // origin that serves the API, which every device in the build is
-        // already reaching — no internet hop, no third-party host that can be
-        // slow or unreachable while the till keeps selling. ImgBB remains the
-        // order of the day under IMAGES_STORE=imgbb, where local storage is
-        // only the fallback it used to be.
+        // Cloud first by default: the shop's photos then live on a CDN that
+        // every device can reach and that survives the API host being
+        // redeployed. A host with a persistent disk can opt into local storage
+        // with IMAGES_STORE=local, which keeps the bytes in-house.
         if ($this->prefersLocal()) {
             $payload = $this->storeLocally($request, $file, fellBack: false);
             if ($payload !== null) {

@@ -35,7 +35,8 @@ if (! function_exists('pos_define_api_routes')) {
             Route::get('products/search', [App\Http\Controllers\ProductController::class, 'search']);
             Route::get('products/latest', [App\Http\Controllers\ProductController::class, 'latest']);
             Route::apiResource('products', App\Http\Controllers\ProductController::class);
-            Route::apiResource('inventories', App\Http\Controllers\InventoryController::class);
+            Route::apiResource('inventory-stores', App\Http\Controllers\InventoryStoreController::class);
+            Route::post('inventory-stores/{inventory_store}/adjust', [App\Http\Controllers\InventoryStoreController::class, 'adjust']);
             Route::get('categories/with-products', [App\Http\Controllers\CategoryController::class, 'withProducts']);
             Route::apiResource('categories', App\Http\Controllers\CategoryController::class);
             Route::apiResource('sales', App\Http\Controllers\SaleController::class);
@@ -44,6 +45,15 @@ if (! function_exists('pos_define_api_routes')) {
             Route::apiResource('orders', App\Http\Controllers\OrderController::class);
             Route::post('orders/{order}/items', [App\Http\Controllers\OrderController::class, 'addItems']);
             Route::apiResource('purchase-items', App\Http\Controllers\PurchaseItemController::class);
+            Route::get('finance/monthly-report', [App\Http\Controllers\FinanceReportController::class, 'monthly']);
+            Route::get('operation-fees', [App\Http\Controllers\OperationFeeController::class, 'index']);
+            Route::post('operation-fees', [App\Http\Controllers\OperationFeeController::class, 'store']);
+            Route::get('operation-fees/report', [App\Http\Controllers\OperationFeeController::class, 'report']);
+            Route::get('operation-fees/product-impact', [App\Http\Controllers\OperationFeeController::class, 'productImpact']);
+            Route::get('operation-fees/settings', [App\Http\Controllers\OperationFeeController::class, 'settings']);
+            Route::put('operation-fees/settings', [App\Http\Controllers\OperationFeeController::class, 'updateSettings']);
+            Route::put('operation-fees/{fee}', [App\Http\Controllers\OperationFeeController::class, 'update']);
+            Route::delete('operation-fees/{fee}', [App\Http\Controllers\OperationFeeController::class, 'destroy']);
             Route::get('settings', [App\Http\Controllers\SettingController::class, 'show']);
             Route::put('settings', [App\Http\Controllers\SettingController::class, 'update']);
             Route::apiResource('feedback', App\Http\Controllers\FeedbackController::class)->only(['index', 'store', 'show', 'destroy']);
@@ -57,7 +67,6 @@ if (! function_exists('pos_define_api_routes')) {
             Route::patch('sales/{sale}', [App\Http\Controllers\SaleController::class, 'update']);
             Route::patch('orders/{order}', [App\Http\Controllers\OrderController::class, 'update']);
             Route::patch('customers/{customer}', [App\Http\Controllers\CustomerController::class, 'update']);
-            Route::patch('inventories/{inventory}', [App\Http\Controllers\InventoryController::class, 'update']);
             Route::patch('settings', [App\Http\Controllers\SettingController::class, 'update']);
             Route::patch('auth/profile', [App\Http\Controllers\ProfileController::class, 'update']);
             Route::prefix('stock-alerts')->group(function () {

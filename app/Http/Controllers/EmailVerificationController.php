@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Mail\OtpMail;
 use App\Models\User;
 use App\Services\OtpService;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -57,15 +59,40 @@ class EmailVerificationController extends Controller
             ]);
         }
 
-        $this->otp->send(
+        $this->sendOrFail(
             $user->email,
             OtpService::VERIFICATION_TABLE,
             new OtpMail(OtpMail::PURPOSE_VERIFICATION),
+            'Verification OTP failed to send.',
         );
 
         return response()->json([
             'message' => 'Verification OTP has been sent to your email.',
         ]);
+    }
+
+    /**
+     * Mail the code, or answer 503 instead of letting the transport exception
+     * surface as an opaque 500.
+     *
+     * A 500 here is indistinguishable from a broken server, so the cashier
+     * retries the whole flow. The body carries a sentence the client already
+     * renders, and the provider's reason is logged for us.
+     */
+    private function sendOrFail(string $email, string $table, OtpMail $mail, string $logMessage): void
+    {
+        try {
+            $this->otp->send($email, $table, $mail);
+        } catch (\Throwable $e) {
+            Log::error($logMessage, [
+                'email' => $email,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw new HttpResponseException(response()->json([
+                'message' => 'Could not send the email right now. Please try again in a moment.',
+            ], 503));
+        }
     }
 
     /**

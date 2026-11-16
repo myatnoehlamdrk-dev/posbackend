@@ -161,13 +161,23 @@ class AuthController extends Controller
         // EmailVerificationController. Previously written to
         // `password_reset_tokens` alongside password-reset codes, so the two
         // flows for one address overwrote each other. Deliberately outside the
-        // transaction: a mail server that cannot be reached must not roll back
-        // an account that was otherwise created.
-        $this->otp->send(
-            $user->email,
-            OtpService::VERIFICATION_TABLE,
-            new OtpMail(OtpMail::PURPOSE_VERIFICATION),
-        );
+        // transaction and caught: a mail provider that cannot be reached must
+        // not roll back -- or 500 -- an account that was otherwise created.
+        // The client still opens the verify screen, where "Resend" reports a
+        // send failure it actually sees instead of leaving a dead form.
+        try {
+            $this->otp->send(
+                $user->email,
+                OtpService::VERIFICATION_TABLE,
+                new OtpMail(OtpMail::PURPOSE_VERIFICATION),
+            );
+        } catch (\Throwable $e) {
+            Log::warning('Verification OTP failed to send after registration.', [
+                'user_id' => $user->id,
+                'email' => $user->email,
+                'error' => $e->getMessage(),
+            ]);
+        }
 
         // Heads-up to the shop's owner address, which belongs to the shop and
         // not to the account: `shop.ownerInformation.email` is a free-typed
@@ -208,10 +218,10 @@ class AuthController extends Controller
      *
      * The logo reaches this endpoint as raw base64 because the authenticated
      * `/images` upload cannot be called before the account exists, so this does
-     * server-side what that endpoint does. The storage order is the same one
-     * `ImageController::store` uses: this server's own disk first (served
-     * through `/uploads` with CORS, no third-party host involved), and ImgBB
-     * first only under `IMAGES_STORE=imgbb`.
+     * server-side what that endpoint does. The storage order matches
+     * `ImageController::store`: ImgBB first whenever it is the configured
+     * store (the default when a key exists), with this server's own disk as
+     * the fallback that keeps a sign-up alive when the CDN is unreachable.
      *
      * A failed write of either kind must not fail a sign-up, so the last
      * resort is always the other host -- and if neither takes it, the payload

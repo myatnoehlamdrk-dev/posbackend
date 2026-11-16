@@ -115,4 +115,20 @@ return [
         'name' => env('MAIL_FROM_NAME', env('APP_NAME', 'Laravel')),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Contact Address
+    |--------------------------------------------------------------------------
+    |
+    | The mailbox recipients are told to write to (the shop-owner notice).
+    | Separate from the from-address so a no-reply sender does not become the
+    | only address a worried recipient can find. Falls back to the from
+    | address when unset.
+    |
+    */
+
+    'contact' => [
+        'address' => env('MAIL_CONTACT_ADDRESS') ?: env('MAIL_FROM_ADDRESS', 'hello@example.com'),
+    ],
+
 ];

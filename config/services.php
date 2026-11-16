@@ -64,14 +64,19 @@ return [
     | Uploaded image storage
     |--------------------------------------------------------------------------
     |
-    | 'local' (default) keeps every upload on this server's disk and serves it
-    | through /uploads with CORS — reachable by every device that already
-    | reaches the API, with no third-party host in the loop. 'imgbb' restores
-    | the old preference: ImgBB first, local disk only as the fallback.
+    | 'imgbb' (the default whenever an API key is configured) sends every
+    | upload to ImgBB's CDN. That is the only durable option on hosts whose
+    | disk is ephemeral: a file written to a Render instance is gone at the
+    | next deploy, so the row keeps pointing at a URL that now 404s.
+    |
+    | 'local' keeps uploads on this server's disk and serves them through
+    | /uploads with CORS — faster and with no third-party host in the loop,
+    | but only safe when that disk survives restarts (a mounted volume, a
+    | normal VPS). Without a key, local is the only working choice.
     |
     */
     'images' => [
-        'store' => env('IMAGES_STORE', 'local'),
+        'store' => env('IMAGES_STORE', env('IMGBB_API_KEY') ? 'imgbb' : 'local'),
     ],
 
 ];

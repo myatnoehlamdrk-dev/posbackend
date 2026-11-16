@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\DashboardService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -28,6 +29,16 @@ class Package extends Model
         'amount_of_product' => 'integer',
         'product_limit' => 'integer',
     ];
+
+    protected static function booted(): void
+    {
+        // The dashboard counts packages (and their stock tiers) per shop, and
+        // caches the result — a package add/rename/delete has to invalidate it
+        // just like a product change does.
+        static::created(fn () => DashboardService::bust());
+        static::updated(fn () => DashboardService::bust());
+        static::deleted(fn () => DashboardService::bust());
+    }
 
     public function category(): BelongsTo
     {

@@ -15,6 +15,7 @@ class DashboardService
 
     public function __construct(
         protected DashboardRepositoryInterface $dashboardRepository,
+        protected OperationFeeService $operationFeeService,
     ) {}
 
     public static function bust(): void
@@ -33,6 +34,7 @@ class DashboardService
             $today = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
             $stockTiers = $this->dashboardRepository->getStockTierCounts($shopId, $userId);
+            $packageTiers = $this->dashboardRepository->getPackageStockTierCounts($shopId, $userId);
             $recentAverages = $this->dashboardRepository->getRecentSalesAverages($shopId);
 
             return [
@@ -42,10 +44,15 @@ class DashboardService
                 'total_products' => $this->dashboardRepository->getTotalProducts($shopId, $userId),
                 'in_stock' => $this->dashboardRepository->getInStockCount($shopId, $userId),
                 'low_stock_count' => $this->dashboardRepository->getLowStockCount($shopId, $userId),
+                'stock_units' => $this->dashboardRepository->getStockUnits($shopId, $userId),
                 'pending_purchases' => $this->dashboardRepository->getPendingPurchases($shopId),
                 'total_sales' => $this->dashboardRepository->getAllTimeSales($shopId),
+                'total_items_sold' => $this->dashboardRepository->getAllTimeItemsSold($shopId),
                 'total_categories' => $this->dashboardRepository->getTotalCategories($shopId, $userId),
-                'total_packages' => $this->dashboardRepository->getTotalPackages($shopId, $userId),
+                'total_packages' => $packageTiers['total'],
+                'packages_in_stock' => $packageTiers['in_stock'],
+                'packages_low_stock' => $packageTiers['low'],
+                'packages_out_stock' => $packageTiers['out'],
                 'brand_count' => $this->dashboardRepository->getBrandCount($shopId, $userId),
                 'categoryless_products' => $this->dashboardRepository->getCategorylessProductCount($shopId, $userId),
                 'high_stock_count' => $stockTiers['high'],
@@ -55,6 +62,7 @@ class DashboardService
                 'sales_count' => $this->dashboardRepository->getSalesCount($shopId),
                 'avg_sale_last10' => $recentAverages['avg_total'],
                 'avg_products_last10' => $recentAverages['avg_products'],
+                'month_summary' => $this->dashboardRepository->getMonthlyComparison($shopId, $userId),
             ];
         });
     }
@@ -96,7 +104,9 @@ class DashboardService
 
     public function getMonthlySales(int $shopId, int $year): array
     {
-        return $this->dashboardRepository->getMonthlySales($shopId, $year);
+        $months = $this->dashboardRepository->getMonthlySales($shopId, $year);
+
+        return $this->operationFeeService->attachMonthlyCosts($shopId, $year, $months);
     }
 
     public function getLeastProducts(int $shopId, int $limit = 3): array
@@ -140,6 +150,7 @@ class DashboardService
             $today = Carbon::today();
             $monthStart = Carbon::now()->startOfMonth();
             $stockTiers = $this->dashboardRepository->getStockTierCounts($shopId, $userId);
+            $packageTiers = $this->dashboardRepository->getPackageStockTierCounts($shopId, $userId);
             $recentAverages = $this->dashboardRepository->getRecentSalesAverages($shopId);
 
             return [
@@ -152,8 +163,12 @@ class DashboardService
                     'low_stock_count' => $this->dashboardRepository->getLowStockCount($shopId, $userId),
                     'pending_purchases' => $this->dashboardRepository->getPendingPurchases($shopId),
                     'total_sales' => $this->dashboardRepository->getAllTimeSales($shopId),
+                    'total_items_sold' => $this->dashboardRepository->getAllTimeItemsSold($shopId),
                     'total_categories' => $this->dashboardRepository->getTotalCategories($shopId, $userId),
-                    'total_packages' => $this->dashboardRepository->getTotalPackages($shopId, $userId),
+                    'total_packages' => $packageTiers['total'],
+                    'packages_in_stock' => $packageTiers['in_stock'],
+                    'packages_low_stock' => $packageTiers['low'],
+                    'packages_out_stock' => $packageTiers['out'],
                     'brand_count' => $this->dashboardRepository->getBrandCount($shopId, $userId),
                     'categoryless_products' => $this->dashboardRepository->getCategorylessProductCount($shopId, $userId),
                     'high_stock_count' => $stockTiers['high'],
@@ -164,6 +179,7 @@ class DashboardService
                     'avg_sale_last10' => $recentAverages['avg_total'],
                     'avg_products_last10' => $recentAverages['avg_products'],
                 ],
+                'month_summary' => $this->dashboardRepository->getMonthlyComparison($shopId, $userId),
                 'category_distribution' => $this->dashboardRepository->getCategoryDistribution($shopId, $userId),
                 'category_quantity' => $this->dashboardRepository->getCategoryQuantitySold($shopId, $days),
                 'top_products' => $this->dashboardRepository->getTopProducts($shopId, 3),
