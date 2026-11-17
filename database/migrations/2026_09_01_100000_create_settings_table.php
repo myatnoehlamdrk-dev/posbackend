@@ -12,7 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->string('theme_mode', 10)->default('light');
-            $table->string('language', 20)->default('Myanmar');
+            $table->string('language', 20)->default('English');
             $table->string('shop_type', 20)->default('shop');
             $table->timestamps();
 

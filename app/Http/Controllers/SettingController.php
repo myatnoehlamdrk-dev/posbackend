@@ -16,7 +16,7 @@ class SettingController extends Controller
             ['user_id' => $request->user()->id],
             [
                 'theme_mode' => 'light',
-                'language' => 'Myanmar',
+                'language' => 'English',
                 'shop_type' => 'shop',
             ]
         );
@@ -52,7 +52,7 @@ class SettingController extends Controller
             ['user_id' => $request->user()->id],
             [
                 'theme_mode' => 'light',
-                'language' => 'Myanmar',
+                'language' => 'English',
                 'shop_type' => 'shop',
             ]
         );
