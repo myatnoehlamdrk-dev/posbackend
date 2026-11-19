@@ -49,6 +49,7 @@ class SendStockRestoredNotificationJob implements ShouldQueue
             [
                 'type' => 'stock_restored',
                 'category' => 'alert',
+                'shop_id' => (string) $this->shopId,
                 'product_id' => $this->productId,
                 'product_name' => $this->productName,
                 'restored' => (string) $this->restoredQty,

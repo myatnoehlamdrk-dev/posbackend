@@ -43,6 +43,7 @@ class SendPackageOutNotificationJob implements ShouldQueue
             [
                 'type' => 'package_out',
                 'category' => 'alert',
+                'shop_id' => (string) $this->shopId,
                 'package_id' => (string) $this->packageId,
                 'package_name' => $this->packageName,
             ]

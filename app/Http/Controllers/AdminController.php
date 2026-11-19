@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Http\Requests\ApproveUserRequest;
 use App\Http\Resources\ShopResource;
 use App\Http\Resources\UserResource;
+use App\Models\FcmToken;
 use App\Models\Shop;
 use App\Models\User;
 use App\Services\AdminDashboardService;
@@ -179,6 +180,7 @@ class AdminController extends Controller
         // to expire -- which, before tokens carried an expiry, was never.
         if (! $becomingActive) {
             $user->tokens()->delete();
+            FcmToken::where('user_id', $user->id)->update(['active' => false]);
         }
 
         return response()->json(UserResource::make($user->fresh()->load('shop'))->resolve(request()));
@@ -193,6 +195,7 @@ class AdminController extends Controller
     public function revokeUserSessions(User $user): JsonResponse
     {
         $revoked = $user->tokens()->delete();
+        FcmToken::where('user_id', $user->id)->update(['active' => false]);
 
         return response()->json([
             'message' => 'Revoked all active sessions for this user.',
@@ -224,6 +227,7 @@ class AdminController extends Controller
         // now carrying the wrong authority. Re-issue is the user's job; the
         // safe default is to end them all.
         $user->tokens()->delete();
+        FcmToken::where('user_id', $user->id)->update(['active' => false]);
 
         return response()->json([
             'message' => 'Role updated. All sessions for this user were revoked.',
@@ -234,6 +238,7 @@ class AdminController extends Controller
     public function destroyUser(User $user): JsonResponse
     {
         $user->tokens()->delete();
+        FcmToken::where('user_id', $user->id)->delete();
         $user->delete();
 
         return $this->deleted();

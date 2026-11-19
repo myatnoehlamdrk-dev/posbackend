@@ -154,6 +154,7 @@ class DailyStockReportJob implements ShouldQueue
                 [
                     'type' => 'stock_report',
                     'category' => 'alert',
+                    'shop_id' => (string) $shopId,
                     'out_count' => (string) count($out),
                     'low_count' => (string) count($low),
                     'package_out_count' => (string) count($packagesOut),

@@ -66,6 +66,7 @@ class SendFeedbackThankYouJob implements ShouldQueue
             [
                 'type' => 'feedback_thanks',
                 'category' => 'system',
+                'shop_id' => (string) ($this->shopId ?? ''),
                 'feedback_id' => (string) $this->feedbackId,
                 'feedback_type' => $this->feedbackType,
                 'user_name' => $this->userName,

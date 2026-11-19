@@ -20,16 +20,21 @@ class FcmTokenController extends Controller
 
         $user = Auth::user();
 
+        $attributes = [
+            'user_id' => $user?->id,
+            'shop_id' => $user?->shop_id,
+            'platform' => $validated['platform'] ?? null,
+            'active' => true,
+            'last_used_at' => now(),
+        ];
+
+        if (! empty($validated['device_id'])) {
+            $attributes['device_id'] = $validated['device_id'];
+        }
+
         FcmToken::updateOrCreate(
             ['token' => $validated['token']],
-            [
-                'user_id' => $user?->id,
-                'shop_id' => $user?->shop_id,
-                'platform' => $validated['platform'] ?? null,
-                'device_id' => $validated['device_id'] ?? null,
-                'active' => true,
-                'last_used_at' => now(),
-            ]
+            $attributes
         );
 
         return response()->json(['message' => 'Token registered']);

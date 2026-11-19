@@ -7,6 +7,7 @@ use App\Http\Resources\ShopResource;
 use App\Http\Resources\UserResource;
 use App\Mail\OtpMail;
 use App\Mail\ShopOwnerNoticeMail;
+use App\Models\FcmToken;
 use App\Models\Shop;
 use App\Models\User;
 use App\Rules\MyanmarNrc;
@@ -429,6 +430,22 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
+        $validated = $request->validate([
+            'fcm_token' => ['nullable', 'string'],
+            'device_id' => ['nullable', 'string'],
+        ]);
+
+        if (! empty($validated['fcm_token'])) {
+            FcmToken::where('token', $validated['fcm_token'])
+                ->update(['active' => false]);
+        }
+
+        if (! empty($validated['device_id'])) {
+            FcmToken::where('user_id', $request->user()->id)
+                ->where('device_id', $validated['device_id'])
+                ->update(['active' => false]);
+        }
+
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Logged out successfully.']);
@@ -442,7 +459,10 @@ class AuthController extends Controller
      */
     public function logoutAll(Request $request): JsonResponse
     {
-        $request->user()->tokens()->delete();
+        $user = $request->user();
+        $user->tokens()->delete();
+
+        FcmToken::where('user_id', $user->id)->update(['active' => false]);
 
         return response()->json(['message' => 'Signed out of all devices.']);
     }

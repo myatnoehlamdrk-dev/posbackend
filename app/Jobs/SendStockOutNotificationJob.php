@@ -40,6 +40,7 @@ class SendStockOutNotificationJob implements ShouldQueue
             [
                 'type' => 'stock_out',
                 'category' => 'alert',
+                'shop_id' => (string) $this->shopId,
                 'product_id' => (string) $this->productId,
                 'product_name' => $this->productName,
             ]
